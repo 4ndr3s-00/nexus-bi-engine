@@ -1,5 +1,5 @@
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from src.api.models import (
     SeedRequest,
     NaturalQueryRequest,
@@ -12,6 +12,7 @@ from src.ingestion.pipeline import pipeline
 from src.ai_engine.text_to_sql import text_to_sql
 from src.ai_engine.query_validator import guard, QueryValidationError
 from src.ai_engine.insight_generator import insight_generator
+from src.reporting.report_generator import StandaloneHtmlReportGenerator
 
 router = APIRouter(prefix="/api/v1", tags=["Lakehouse Analytics"])
 
@@ -75,6 +76,30 @@ async def generate_executive_report(req: NaturalQueryRequest):
         )
     except QueryValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/report/export-html")
+async def export_report_html(req: NaturalQueryRequest):
+    """
+    Generate and return a standalone, single-file interactive HTML executive report.
+    Can be viewed in any Linux browser or saved as PDF.
+    """
+    try:
+        query_res = text_to_sql.execute_analytical_query(req.question, req.custom_sql)
+        report = insight_generator.generate_report(query_res)
+        report_payload = {
+            "headline": report["headline"],
+            "summary": report["summary"],
+            "kpi_cards": report["kpi_cards"],
+            "highlights": report["highlights"],
+            "recommendations": report["recommendations"],
+            "table_data": report["table_data"],
+            "sql": query_res["sql"],
+            "latency_ms": query_res["latency_ms"]
+        }
+        html_content = StandaloneHtmlReportGenerator.generate_html(report_payload)
+        return Response(content=html_content, media_type="text/html")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

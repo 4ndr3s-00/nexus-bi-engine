@@ -4,16 +4,17 @@ import {
   Download, 
   Terminal, 
   CheckCircle2, 
-  AlertTriangle, 
   Lightbulb, 
   ChevronDown, 
   ChevronUp,
-  Table as TableIcon
+  Table as TableIcon,
+  FileCode
 } from 'lucide-react';
 import KPICard from './KPICard';
 
 export default function ExecutiveReportView({ report, onClose }) {
   const [showSql, setShowSql] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   if (!report) return null;
 
@@ -25,6 +26,31 @@ export default function ExecutiveReportView({ report, onClose }) {
     a.download = `nexus_executive_report_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportHtml = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch('/api/v1/report/export-html', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: report.question, custom_sql: report.sql })
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nexus_report_${Date.now()}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Error exporting HTML:', err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -52,16 +78,26 @@ export default function ExecutiveReportView({ report, onClose }) {
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1a1d29] hover:bg-[#202433] text-slate-300 border border-[#2a2e42] transition-all"
           >
             <Terminal className="w-3.5 h-3.5 text-purple-400" />
-            <span>{showSql ? 'Ocultar SQL' : 'Ver SQL Generado'}</span>
+            <span>{showSql ? 'Ocultar SQL' : 'Ver SQL'}</span>
             {showSql ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
 
           <button
             onClick={handleExportJson}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-pink-600 hover:brightness-110 text-white shadow-md shadow-purple-900/30 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1a1d29] hover:bg-[#202433] text-slate-300 border border-[#2a2e42] transition-all"
+            title="Exportar JSON crudo"
+          >
+            <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+            <span>JSON</span>
+          </button>
+
+          <button
+            onClick={handleExportHtml}
+            disabled={isExporting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-110 active:scale-95 text-white shadow-md shadow-purple-900/30 transition-all disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Exportar Informe</span>
+            <span>{isExporting ? 'Descargando...' : 'Descargar HTML'}</span>
           </button>
         </div>
       </div>
