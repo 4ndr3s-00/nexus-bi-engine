@@ -11,6 +11,7 @@ import {
   FileCode
 } from 'lucide-react';
 import KPICard from './KPICard';
+import DynamicReportChart from './DynamicReportChart';
 
 export default function ExecutiveReportView({ report, onClose }) {
   const [showSql, setShowSql] = useState(false);
@@ -118,18 +119,30 @@ export default function ExecutiveReportView({ report, onClose }) {
         </div>
       )}
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {report.kpi_cards?.map((card, idx) => (
-          <KPICard
-            key={idx}
-            label={card.label}
-            value={card.value}
-            change={card.change}
-            trend={card.trend}
-          />
-        ))}
-      </div>
+      {/* KPI Cards Row (If not out-of-domain) */}
+      {report.kpi_cards?.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {report.kpi_cards.map((card, idx) => (
+            <KPICard
+              key={idx}
+              label={card.label}
+              value={card.value}
+              change={card.change}
+              trend={card.trend}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Dynamic Contextual Chart */}
+      <DynamicReportChart 
+        chartType={report.chart_type}
+        data={report.table_data}
+        dimensions={report.dimensions}
+        directAnswer={report.direct_answer}
+        headline={report.headline}
+        isOutOfDomain={report.is_out_of_domain}
+      />
 
       {/* Executive Summary Narrative */}
       <div className="bg-[#1a1c27] border border-[#272b3c] rounded-2xl p-5">

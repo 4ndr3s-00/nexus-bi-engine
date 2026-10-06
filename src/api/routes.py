@@ -68,11 +68,14 @@ async def generate_executive_report(req: NaturalQueryRequest):
             latency_ms=query_res["latency_ms"],
             headline=report["headline"],
             summary=report["summary"],
+            chart_type=report.get("chart_type", "general_bars"),
             kpi_cards=[KPICard(**c) for c in report["kpi_cards"]],
             highlights=report["highlights"],
             recommendations=report["recommendations"],
             table_data=report["table_data"],
-            dimensions=report["dimensions"]
+            dimensions=report["dimensions"],
+            direct_answer=report.get("direct_answer"),
+            is_out_of_domain=query_res.get("is_out_of_domain", False)
         )
     except QueryValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))

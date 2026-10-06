@@ -20,11 +20,14 @@ class ExecutiveReportResponse(BaseModel):
     latency_ms: float
     headline: str
     summary: str
+    chart_type: str = "general_bars"
     kpi_cards: list[KPICard]
     highlights: list[str]
     recommendations: list[str]
     table_data: list[dict[str, Any]]
     dimensions: list[str]
+    direct_answer: Optional[str] = None
+    is_out_of_domain: bool = False
 
 class DashboardOverviewResponse(BaseModel):
     kpis: list[KPICard]
