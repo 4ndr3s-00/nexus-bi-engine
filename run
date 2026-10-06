@@ -37,7 +37,12 @@ if [ "$1" == "--check" ]; then
     exit 0
 fi
 
-echo -e "${CYAN}[*] Starting Backend (FastAPI + DuckDB) & Frontend (Vite + React)...${NC}"
+# Cleanup previous orphaned instances on ports 3000 & 8080 if any
+fuser -k 3000/tcp 2>/dev/null || true
+fuser -k 8080/tcp 2>/dev/null || true
+sleep 0.5
+
+echo -e "${CYAN}[*] Starting Backend (FastAPI + DuckDB on :8080) & Frontend (Vite on :3000)...${NC}"
 
 # Cleanup background processes on exit
 cleanup() {
@@ -48,19 +53,20 @@ cleanup() {
     if [ -n "$FRONTEND_PID" ]; then
         kill "$FRONTEND_PID" 2>/dev/null || true
     fi
+    fuser -k 3000/tcp 8080/tcp 2>/dev/null || true
     wait 2>/dev/null || true
     echo -e "${GREEN}[✔] Services stopped safely.${NC}"
 }
 trap cleanup SIGINT SIGTERM EXIT
 
-# Start Backend
-.venv/bin/uvicorn src.api.server:app --host 127.0.0.1 --port 8000 --reload &
+# Start Backend on port 8080
+.venv/bin/uvicorn src.api.server:app --host 127.0.0.1 --port 8080 --reload &
 BACKEND_PID=$!
 
 # Wait briefly for backend to bind
-sleep 1
+sleep 1.5
 
-# Start Frontend
+# Start Frontend on port 3000
 cd frontend
 npm run dev -- --host 127.0.0.1 --port 3000 &
 FRONTEND_PID=$!
@@ -69,8 +75,8 @@ cd "$ROOT_DIR"
 echo -e "${GREEN}-----------------------------------------------------${NC}"
 echo -e "${GREEN}  Nexus BI Engine is running!${NC}"
 echo -e "  💻 Frontend:  ${CYAN}http://localhost:3000${NC}"
-echo -e "  ⚡ Backend:   ${CYAN}http://localhost:8000${NC}"
-echo -e "  📚 API Docs:  ${CYAN}http://localhost:8000/docs${NC}"
+echo -e "  ⚡ Backend:   ${CYAN}http://localhost:8080${NC}"
+echo -e "  📚 API Docs:  ${CYAN}http://localhost:8080/docs${NC}"
 echo -e "${GREEN}-----------------------------------------------------${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop all services.${NC}"
 
