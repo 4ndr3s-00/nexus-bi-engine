@@ -81,13 +81,20 @@ class TextToSqlEngine:
                 where_clauses.append(f"p.category = '{cat}'")
                 break
 
-        # 3. Detect Limit
-        limit = 10
-        limit_match = re.search(r"top\s+(\d+)", q)
-        if limit_match:
-            limit = int(limit_match.group(1))
+        # 3. Detect Polarity & Ordering (Best vs Worst / Highest vs Lowest)
+        is_bottom = any(w in q for w in ["peor", "peores", "menor", "menores", "bajo", "bajos", "menos", "minimo", "mínimo", "bottom", "worst", "lowest"])
+        order_dir = "ASC" if is_bottom else "DESC"
 
-        # 4. Construct SQL
+        # 4. Detect Limit (singular 'mes', 'peor mes', 'mejor mes' defaults to 1 or top N)
+        limit = 10
+        if any(w in q for w in ["cual fue", "cuál fue", "el peor", "el mejor", "que mes", "qué mes"]) and not any(w in q for w in ["top", "peores", "mejores"]):
+            limit = 1
+        else:
+            limit_match = re.search(r"(?:top|peores|mejores)\s+(\d+)", q)
+            if limit_match:
+                limit = int(limit_match.group(1))
+
+        # 5. Construct SQL
         where_sql = f"\nWHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         dim_select = ",\n    ".join(selected_dims)
         group_sql = ", ".join([str(i + 1) for i in range(len(group_by_cols))])
@@ -101,7 +108,7 @@ class TextToSqlEngine:
     ROUND(AVG(f.net_revenue), 2) AS avg_order_value
 {self.catalog.TABLE_JOINS.strip()}{where_sql}
 GROUP BY {group_sql}
-ORDER BY total_revenue DESC
+ORDER BY total_revenue {order_dir}
 LIMIT {limit};"""
         return sql
 
