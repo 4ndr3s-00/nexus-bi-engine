@@ -19,7 +19,9 @@ class MedallionPipeline:
         self.silver_dir = settings.SILVER_DIR
         self.gold_dir = settings.GOLD_DIR
 
-    def run_pipeline(self, n_urgencias: int = 400_000) -> dict:
+    def run_pipeline(self, n_urgencias: int = 400_000, n_rows: int = None) -> dict:
+        if n_rows is not None:
+            n_urgencias = n_rows
         console.print(f"[bold magenta]▶ Starting Healthcare Medallion Pipeline for 8 EPS/IPS ({n_urgencias:,} Urgencias)...[/bold magenta]")
         start_time = time.time()
         
@@ -80,6 +82,7 @@ class MedallionPipeline:
 
         return {
             "status": "success",
+            "rows_processed": n_urgencias,
             "total_facts_processed": total_rows,
             "bronze_duration_sec": bronze_duration,
             "silver_duration_sec": silver_duration,
