@@ -448,6 +448,15 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
               <div className="flex items-center gap-2 text-slate-300 font-medium">
                 <FileText className="w-4 h-4 text-purple-400" />
                 <span>{activeDoc.document_type} - {activeDoc.numero_radicado}</span>
+                {activeDoc.sha256_hash && (
+                  <span 
+                    title={`Hash SHA-256 inmutable de custodia: ${activeDoc.sha256_hash}`}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800/90 text-slate-400 border border-slate-700 flex items-center gap-1 cursor-help"
+                  >
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <span>SHA-256: {activeDoc.sha256_hash.slice(0, 8)}...{activeDoc.sha256_hash.slice(-4)}</span>
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 text-slate-400">
                 <button 
@@ -967,6 +976,14 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
                           <span className="text-slate-500 font-mono text-[10px]">{hist.fecha_decision.split('T')[0]}</span>
                         </div>
                         <p className="text-slate-400 text-[10px] mt-0.5">{hist.observaciones || hist.motivo_glosa}</p>
+                        {hist.chain_hash && (
+                          <div className="mt-1 pt-1 border-t border-[#232635] flex items-center justify-between text-[9px] font-mono text-slate-500">
+                            <span className="flex items-center gap-1 text-emerald-400/80">
+                              <ShieldCheck className="w-2.5 h-2.5" /> Custodia Criptográfica
+                            </span>
+                            <span title={hist.chain_hash}>{hist.chain_hash.slice(0, 8)}...{hist.chain_hash.slice(-4)}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

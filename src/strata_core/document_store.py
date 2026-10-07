@@ -1,7 +1,19 @@
+import hashlib
 import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 import uuid
+
+def compute_document_hash(
+    text: str,
+    radicado: str,
+    ips: str,
+    eps: str,
+    valor: float
+) -> str:
+    """Computes an immutable SHA-256 fingerprint representing the document payload."""
+    payload = f"{radicado}|{ips}|{eps}|{valor:.2f}|{text.strip()}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 class AuditorDecision(BaseModel):
     decision: str  # 'Aprobado', 'Glosado', 'Subsanación'
@@ -9,7 +21,8 @@ class AuditorDecision(BaseModel):
     auditor_name: str
     motivo_glosa: Optional[str] = None
     observaciones: Optional[str] = None
-    fecha_decision: str = Field(default_factory=lambda: datetime.datetime.now().isoformat())
+    fecha_decision: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+    chain_hash: str = ""  # Cryptographic chain-of-custody seal
 
 class MedicalDocumentItem(BaseModel):
     id: str
@@ -43,6 +56,19 @@ class MedicalDocumentItem(BaseModel):
     image_url: Optional[str] = None
     file_name: Optional[str] = None
     is_user_uploaded: bool = False
+
+    # Cryptographic integrity
+    sha256_hash: str = ""
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.sha256_hash:
+            self.sha256_hash = compute_document_hash(
+                text=self.extracted_text,
+                radicado=self.numero_radicado,
+                ips=self.ips_emisora,
+                eps=self.eps_receptora,
+                valor=self.valor_reclamado
+            )
 
 class MedicalDocumentStore:
     """
@@ -210,12 +236,21 @@ class MedicalDocumentStore:
             raise ValueError(f"Decisión inválida '{decision}'. Opciones válidas: {valid_decisions}")
 
         doc.estado = decision
+        now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
+        # Link previous decision hash or document hash to form tamper-evident chain
+        prev_hash = doc.historial_auditoria[-1].chain_hash if doc.historial_auditoria else doc.sha256_hash
+        chain_payload = f"{prev_hash}|{doc_id}|{decision}|{auditor_id}|{now_utc}"
+        chain_hash = hashlib.sha256(chain_payload.encode("utf-8")).hexdigest()
+
         audit_record = AuditorDecision(
             decision=decision,
             auditor_id=auditor_id,
             auditor_name=auditor_name,
             motivo_glosa=motivo_glosa,
-            observaciones=observaciones
+            observaciones=observaciones,
+            fecha_decision=now_utc,
+            chain_hash=chain_hash
         )
         doc.historial_auditoria.append(audit_record)
         return doc
