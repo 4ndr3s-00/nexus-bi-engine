@@ -1,22 +1,17 @@
 import React from 'react';
 import { 
-  BarChart3, 
   Sparkles, 
-  Database, 
   FileCheck2, 
   HeartPulse, 
   Zap,
-  Cpu,
-  Activity,
-  Layers
+  Activity
 } from 'lucide-react';
 
-export default function Sidebar({ activeSection, setActiveSection, onSeedData, isSeeding, lakehouseStats }) {
+export default function Sidebar({ activeSection, setActiveSection, onSeedData, isSeeding }) {
   const navItems = [
     { id: 'hospital-bi', label: 'BI Hospitalario (8 EPS/IPS)', icon: HeartPulse, badge: '24/7' },
     { id: 'strata-auditor', label: 'Auditoría Strata Core', icon: FileCheck2, badge: 'Portal' },
     { id: 'ai-report', label: 'AI Executive Briefing', icon: Sparkles },
-    { id: 'lakehouse', label: 'Medallion Lakehouse', icon: Database },
   ];
 
   return (
@@ -32,7 +27,7 @@ export default function Sidebar({ activeSection, setActiveSection, onSeedData, i
               Nexus BI
             </h1>
             <p className="text-[10px] font-semibold text-purple-400 tracking-wider uppercase">
-              Salud 8 EPS/IPS Lakehouse
+              Red Hospitalaria 8 EPS/IPS
             </p>
           </div>
         </div>
@@ -71,7 +66,7 @@ export default function Sidebar({ activeSection, setActiveSection, onSeedData, i
         {/* Quick Pipeline Refresh */}
         <div className="mt-8 pt-6 border-t border-[#222533]">
           <div className="text-xs font-semibold uppercase text-slate-500 tracking-wider mb-3 px-2">
-            Ingesta Clínica
+            Red Hospitalaria
           </div>
           <button
             onClick={onSeedData}
@@ -79,26 +74,26 @@ export default function Sidebar({ activeSection, setActiveSection, onSeedData, i
             className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600/20 to-indigo-600/20 hover:from-purple-600/30 hover:to-indigo-600/30 text-purple-300 border border-purple-500/30 transition-all disabled:opacity-50"
           >
             <Zap className={`w-3.5 h-3.5 text-purple-400 ${isSeeding ? 'animate-spin' : ''}`} />
-            <span>{isSeeding ? 'Procesando Red 8 EPS...' : 'Regenerar Lakehouse Clínico'}</span>
+            <span>{isSeeding ? 'Actualizando Red 8 EPS...' : 'Actualizar Datos de la Red'}</span>
           </button>
         </div>
       </div>
 
-      {/* Engine Status Pill */}
+      {/* Operational Network Status */}
       <div className="rounded-2xl border border-[#222533] bg-[#151720] p-4 text-xs space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-            <Cpu className="w-3.5 h-3.5 text-purple-400" />
-            DuckDB + Parquet
+          <span className="text-slate-300 flex items-center gap-1.5 font-medium">
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            Red Asistencial
           </span>
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Sub-50ms
+            En Línea
           </span>
         </div>
-        <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-          <span>8 EPS/IPS 24/7</span>
-          <span className="text-purple-400 font-semibold">Gold Ready</span>
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <span>8 EPS / IPS Conectadas</span>
+          <span className="text-purple-400 font-semibold">24/7</span>
         </div>
       </div>
     </aside>

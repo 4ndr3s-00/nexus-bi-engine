@@ -4,7 +4,6 @@ import Header from './components/Header';
 import HospitalDashboardView from './components/HospitalDashboardView';
 import DocumentAuditorView from './components/DocumentAuditorView';
 import ExecutiveReportView from './components/ExecutiveReportView';
-import LakehouseMonitor from './components/LakehouseMonitor';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('hospital-bi');
@@ -16,7 +15,6 @@ export default function App() {
   const [hospitalOverview, setHospitalOverview] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [lakehouseStats, setLakehouseStats] = useState(null);
 
   // Load initial hospital overview on mount
   const fetchHospitalOverview = async () => {
@@ -31,21 +29,8 @@ export default function App() {
     }
   };
 
-  const fetchLakehouseStats = async () => {
-    try {
-      const res = await fetch('/api/v1/lakehouse/stats');
-      if (res.ok) {
-        const data = await res.json();
-        setLakehouseStats(data.stats);
-      }
-    } catch (err) {
-      console.error('Failed to load lakehouse stats:', err);
-    }
-  };
-
   useEffect(() => {
     fetchHospitalOverview();
-    fetchLakehouseStats();
   }, []);
 
   // Handle Natural Language Clinical AI Query
@@ -83,7 +68,6 @@ export default function App() {
       });
       if (res.ok) {
         await fetchHospitalOverview();
-        await fetchLakehouseStats();
       }
     } catch (err) {
       console.error('Seeding error:', err);
@@ -100,7 +84,6 @@ export default function App() {
         setActiveSection={setActiveSection}
         onSeedData={handleSeedData}
         isSeeding={isSeeding}
-        lakehouseStats={lakehouseStats}
       />
 
       {/* Main Content Area */}
@@ -114,7 +97,6 @@ export default function App() {
           latencyMs={activeReport?.latency_ms || hospitalOverview?.query_latency_ms}
           onRefresh={() => {
             fetchHospitalOverview();
-            fetchLakehouseStats();
           }}
           onSelectSuggestion={(s) => {
             setQuery(s);
@@ -163,13 +145,6 @@ export default function App() {
                 a.download = `Informe_Clinico_Nexus_BI.html`;
                 a.click();
               }}
-            />
-          )}
-
-          {activeSection === 'lakehouse' && (
-            <LakehouseMonitor 
-              stats={lakehouseStats} 
-              onRefresh={fetchLakehouseStats}
             />
           )}
         </div>

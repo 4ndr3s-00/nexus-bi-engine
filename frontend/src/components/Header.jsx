@@ -62,7 +62,7 @@ export default function Header({
           <div className="h-6 w-px bg-[#232635]"></div>
           <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#151720] border border-[#232635] text-xs font-mono text-purple-300">
             <Clock className="w-3.5 h-3.5 text-purple-400" />
-            <span>OLAP: {latencyMs ? `${latencyMs}ms` : '32ms'}</span>
+            <span>Respuesta: {latencyMs ? `${latencyMs}ms` : '32ms'}</span>
           </div>
         </div>
       </div>

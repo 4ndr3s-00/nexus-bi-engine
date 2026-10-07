@@ -76,7 +76,7 @@ export default function HospitalDashboardView({ hospitalData, onRunQuery, isLoad
 
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="text-right">
-            <span className="text-slate-500 block text-[10px]">Latencia OLAP DuckDB</span>
+            <span className="text-slate-500 block text-[10px]">Tiempo de Respuesta</span>
             <span className="font-bold text-emerald-400">{query_latency_ms} ms</span>
           </div>
           <div className="w-px h-8 bg-slate-700"></div>
