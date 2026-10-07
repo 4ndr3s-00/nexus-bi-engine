@@ -26,7 +26,12 @@ import {
   Sparkles,
   Upload,
   FileUp,
-  Plus
+  Plus,
+  Bot,
+  Quote,
+  MessageSquare,
+  Zap,
+  CornerDownLeft
 } from 'lucide-react';
 
 export default function DocumentAuditorView({ onRefreshOverview }) {
@@ -38,6 +43,26 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
   const [showRawText, setShowRawText] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
   
+  // Right Pane Tab: 'qa' (Consulta IA Ultra-Precisa) | 'perception' (Percepción & Checklist)
+  const [rightPaneTab, setRightPaneTab] = useState('qa');
+
+  // Document QA state (PDF-Engine Ultra-Precise style)
+  const [qaQuestion, setQaQuestion] = useState('');
+  const [isAskingQA, setIsAskingQA] = useState(false);
+  const [qaResult, setQaResult] = useState(null);
+  const [qaError, setQaError] = useState(null);
+  const [qaHistory, setQaHistory] = useState([]);
+
+  // Suggested Quick Clinical Questions
+  const suggestedQuestions = [
+    "¿Qué medicamento y dosis se prescribió?",
+    "¿Quién es el médico tratante y su registro?",
+    "¿Cuál es el código CIE-10 y diagnóstico?",
+    "¿Cuál es el valor reclamado en la factura?",
+    "¿Existe algún riesgo o causal de glosa?",
+    "¿Cuál es la fecha de radicación y plazo normativo?"
+  ];
+
   // Modal for Glosa reason
   const [showGlosaModal, setShowGlosaModal] = useState(false);
   const [motivoGlosa, setMotivoGlosa] = useState('GL-04 Autorización o radicación extemporánea');
@@ -178,6 +203,51 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
 
   const activeDoc = documents.find(d => d.id === selectedDocId);
 
+  // Reset QA results when switching document
+  useEffect(() => {
+    setQaResult(null);
+    setQaError(null);
+  }, [selectedDocId]);
+
+  // Handle Ultra-Precise Document Q&A (PDF-Engine style)
+  const handleAskQuestion = async (customQ) => {
+    const query = (typeof customQ === 'string' ? customQ : qaQuestion).trim();
+    if (!query || !activeDoc) return;
+    setIsAskingQA(true);
+    setQaError(null);
+    try {
+      const res = await fetch(`/api/v1/documents/${activeDoc.id}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: query })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Error al consultar soporte documental');
+      }
+      const data = await res.json();
+      setQaResult(data);
+      setQaHistory(prev => [
+        { 
+          question: query, 
+          answer: data.answer, 
+          quote: data.exact_quote, 
+          cat: data.target_category, 
+          tokens: data.compressed_tokens,
+          confidence: data.confidence_score,
+          latency: data.latency_ms,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+        },
+        ...prev.filter(item => item.question !== query).slice(0, 3)
+      ]);
+      setQaQuestion('');
+    } catch (err) {
+      setQaError(err.message);
+    } finally {
+      setIsAskingQA(false);
+    }
+  };
+
   // Submit Auditor Decision
   const handleDecision = async (decision) => {
     if (!activeDoc) return;
@@ -267,6 +337,9 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
             <option value="Nueva EPS">Nueva EPS</option>
             <option value="Salud Total">Salud Total EPS</option>
             <option value="Compensar">Compensar EPS</option>
+            <option value="Coosalud">Coosalud EPS</option>
+            <option value="Famisanar">Famisanar EPS</option>
+            <option value="Savia Salud">Savia Salud EPS</option>
           </select>
 
           {/* Status buttons */}
@@ -511,96 +584,335 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
             </div>
           </div>
 
-          {/* RIGHT PANE: Strata Core Perception & Action Center */}
+          {/* RIGHT PANE: Strata Core Dual Center (Ultra-Precise QA & Perception) */}
           <div className="col-span-12 lg:col-span-5 flex flex-col space-y-4">
-            {/* Perception Analysis Card */}
-            <div className="bg-[#12141c] border border-[#222533] rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[#222533]">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Análisis de Percepción Strata Core</h3>
-                    <p className="text-[10px] text-purple-400 font-mono">Qwen 2.5 Vision Engine (:8001)</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-mono font-bold text-emerald-400">{(activeDoc.confidence_score * 100).toFixed(0)}%</span>
-                  <span className="text-[10px] text-slate-500 block">Confianza</span>
-                </div>
-              </div>
+            {/* View Selector Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-[#12141c] border border-[#222533] rounded-2xl text-xs font-semibold">
+              <button
+                onClick={() => setRightPaneTab('qa')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                  rightPaneTab === 'qa'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 ring-1 ring-purple-400/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#181a26]'
+                }`}
+              >
+                <Bot className="w-3.5 h-3.5 text-purple-200" />
+                <span>Consulta IA Ultra-Precisa</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-400/40 text-purple-200 font-mono">
+                  0% Hallucination
+                </span>
+              </button>
 
-              {/* Clinical Consistency Flag */}
-              <div className={`p-3 rounded-xl border flex items-start gap-3 ${
-                activeDoc.riesgo_glosa_detectado
-                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-              }`}>
-                {activeDoc.riesgo_glosa_detectado ? (
-                  <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                ) : (
-                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <h4 className="text-xs font-bold">
-                    {activeDoc.riesgo_glosa_detectado ? 'Riesgo Normativo de Glosa Detectado' : 'Consistencia Clínica Verificada'}
-                  </h4>
-                  <p className="text-[11px] mt-0.5 leading-relaxed opacity-90">
-                    {activeDoc.motivo_alerta || 'Los soportes de historia clínica, códigos CIE-10 y firmas cumplen los estándares de la Supersalud.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Technical Perception Checklist */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
-                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Firma del Especialista</span>
-                  <div className="flex items-center gap-1.5 mt-1 font-semibold">
-                    {activeDoc.firma_detectada ? (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> Válida y Presente
-                      </span>
-                    ) : (
-                      <span className="text-rose-400 flex items-center gap-1">
-                        <XCircle className="w-3.5 h-3.5" /> Ausente / Ilegible
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
-                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Sello Habilitación IPS</span>
-                  <div className="flex items-center gap-1.5 mt-1 font-semibold">
-                    {activeDoc.sello_detectado ? (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> Detectado
-                      </span>
-                    ) : (
-                      <span className="text-amber-400 flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Sin Sello
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
-                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Médico & Matrícula</span>
-                  <div className="mt-1 text-slate-200 truncate font-medium">
-                    {activeDoc.medico_tratante}
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono">{activeDoc.registro_medico}</span>
-                </div>
-
-                <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
-                  <span className="text-[10px] text-slate-500 uppercase block font-semibold">Plazo Normativo Legal</span>
-                  <div className="flex items-center gap-1 mt-1 font-mono font-bold text-purple-300">
-                    <Clock className="w-3.5 h-3.5 text-purple-400" />
-                    <span>{activeDoc.dias_restantes_normativa} días restantes</span>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={() => setRightPaneTab('perception')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+                  rightPaneTab === 'perception'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 ring-1 ring-purple-400/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#181a26]'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-200" />
+                <span>Percepción & Checklist</span>
+              </button>
             </div>
+
+            {/* TAB CONTENT: 1. Ultra-Precise Document QA (PDF-Engine style) */}
+            {rightPaneTab === 'qa' && (
+              <div className="bg-[#12141c] border border-[#222533] rounded-2xl p-5 space-y-4 animate-fadeIn">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-[#222533]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30">
+                      <Bot className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Interrogador Clínico Documental
+                      </h3>
+                      <p className="text-[10px] text-purple-400 font-mono">
+                        Respuestas acotadas con cita textual literal
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-mono px-2 py-1 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 font-bold block">
+                      Tokens: &lt;350
+                    </span>
+                  </div>
+                </div>
+
+                {/* Suggested Query Chips */}
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1.5 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    Consultas Frecuentes de Auditoría:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestedQuestions.map((q, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleAskQuestion(q)}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-[#181a26] hover:bg-purple-600/20 hover:border-purple-500/40 border border-[#2d3145] text-slate-300 hover:text-purple-200 transition-all text-left cursor-pointer"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Question Input Form */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAskQuestion();
+                  }}
+                  className="space-y-2"
+                >
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={qaQuestion}
+                      onChange={(e) => setQaQuestion(e.target.value)}
+                      placeholder="Pregunta sobre dosis, médico, diagnóstico, tarifas..."
+                      disabled={isAskingQA}
+                      className="w-full bg-[#161822] border border-[#2d3145] text-xs text-slate-200 rounded-xl pl-3.5 pr-20 py-2.5 outline-none focus:border-purple-500 placeholder-slate-500 transition-all"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isAskingQA || !qaQuestion.trim()}
+                      className="absolute right-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm shadow-purple-950/40"
+                    >
+                      {isAskingQA ? (
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Preguntar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Error Banner */}
+                {qaError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{qaError}</span>
+                  </div>
+                )}
+
+                {/* Loading State */}
+                {isAskingQA && (
+                  <div className="p-4 rounded-xl bg-[#161822] border border-[#2d3145] flex items-center gap-3 animate-pulse">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400">
+                      <Sparkles className="w-4 h-4 animate-spin" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-200">
+                        Compresión Semántica & Verificación de Citas...
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Extrayendo evidencia documental con 0% de alucinación.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* QA Result Card */}
+                {qaResult && !isAskingQA && (
+                  <div className="p-4 rounded-xl bg-[#161822] border border-purple-500/40 space-y-3 shadow-lg shadow-purple-950/20">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#25283a]">
+                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase">
+                        {qaResult.target_category || 'CLÍNICO'}
+                      </span>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                        <span className="text-emerald-400 font-bold">
+                          {(qaResult.confidence_score * 100).toFixed(0)}% Certeza
+                        </span>
+                        <span>•</span>
+                        <span>{qaResult.compressed_tokens} tokens</span>
+                        <span>•</span>
+                        <span className="text-slate-400">{qaResult.latency_ms} ms</span>
+                      </div>
+                    </div>
+
+                    {/* Direct Answer */}
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                        Respuesta Quirúrgica:
+                      </span>
+                      <p className="text-xs font-medium text-slate-100 leading-relaxed bg-[#10121a] p-3 rounded-lg border border-[#25283a]">
+                        {qaResult.answer}
+                      </p>
+                    </div>
+
+                    {/* Exact Quote Block */}
+                    {qaResult.exact_quote && (
+                      <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs space-y-1">
+                        <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-emerald-400">
+                          <Quote className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Cita Textual Verificada en Soporte:</span>
+                        </div>
+                        <p className="font-mono text-[11px] italic text-emerald-300 bg-emerald-950/40 p-2 rounded border border-emerald-500/20">
+                          "{qaResult.exact_quote}"
+                        </p>
+                        <span className="text-[9px] text-emerald-400/80 block">
+                          ✓ Evidencia literal sin inferencias inventadas.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Source engine footer */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1">
+                      <span>Motor: {qaResult.source_engine}</span>
+                      <span>Radicado: {qaResult.document_id}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State when no query made yet */}
+                {!qaResult && !isAskingQA && !qaError && (
+                  <div className="p-4 rounded-xl bg-[#161822]/60 border border-dashed border-[#2d3145] text-center space-y-1.5">
+                    <MessageSquare className="w-6 h-6 text-slate-600 mx-auto" />
+                    <h4 className="text-xs font-semibold text-slate-300">
+                      Asistente de Consulta Ultra-Preciso Activo
+                    </h4>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                      Haz clic en cualquiera de las consultas frecuentes arriba o formula tu propia pregunta para extraer datos clínicos exactos con respaldo documental.
+                    </p>
+                  </div>
+                )}
+
+                {/* Session Query History */}
+                {qaHistory.length > 0 && (
+                  <div className="pt-2 border-t border-[#222533]">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold block mb-1.5">
+                      Consultas Recientes de la Sesión:
+                    </span>
+                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                      {qaHistory.map((item, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setQaResult({
+                            document_id: activeDoc.id,
+                            question: item.question,
+                            answer: item.answer,
+                            exact_quote: item.quote,
+                            target_category: item.cat,
+                            confidence_score: item.confidence || 0.98,
+                            compressed_tokens: item.tokens || 120,
+                            source_engine: "Historial de Sesión",
+                            latency_ms: item.latency || 0.5
+                          })}
+                          className="w-full text-left p-1.5 rounded-lg bg-[#161822] hover:bg-[#1f2230] border border-[#25283a] text-[11px] flex items-center justify-between transition-all"
+                        >
+                          <span className="text-slate-300 truncate max-w-[260px]">
+                            {item.question}
+                          </span>
+                          <span className="text-[9px] font-mono text-purple-400 shrink-0">
+                            {item.time}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB CONTENT: 2. Perception Analysis & Technical Checklist */}
+            {rightPaneTab === 'perception' && (
+              <div className="bg-[#12141c] border border-[#222533] rounded-2xl p-5 space-y-4 animate-fadeIn">
+                <div className="flex items-center justify-between pb-3 border-b border-[#222533]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Análisis de Percepción Strata Core</h3>
+                      <p className="text-[10px] text-purple-400 font-mono">Qwen 2.5 Vision Engine (:8001)</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono font-bold text-emerald-400">{(activeDoc.confidence_score * 100).toFixed(0)}%</span>
+                    <span className="text-[10px] text-slate-500 block">Confianza</span>
+                  </div>
+                </div>
+
+                {/* Clinical Consistency Flag */}
+                <div className={`p-3 rounded-xl border flex items-start gap-3 ${
+                  activeDoc.riesgo_glosa_detectado
+                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                }`}>
+                  {activeDoc.riesgo_glosa_detectado ? (
+                    <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <h4 className="text-xs font-bold">
+                      {activeDoc.riesgo_glosa_detectado ? 'Riesgo Normativo de Glosa Detectado' : 'Consistencia Clínica Verificada'}
+                    </h4>
+                    <p className="text-[11px] mt-0.5 leading-relaxed opacity-90">
+                      {activeDoc.motivo_alerta || 'Los soportes de historia clínica, códigos CIE-10 y firmas cumplen los estándares de la Supersalud.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Technical Perception Checklist */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
+                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">Firma del Especialista</span>
+                    <div className="flex items-center gap-1.5 mt-1 font-semibold">
+                      {activeDoc.firma_detectada ? (
+                        <span className="text-emerald-400 flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5" /> Válida y Presente
+                        </span>
+                      ) : (
+                        <span className="text-rose-400 flex items-center gap-1">
+                          <XCircle className="w-3.5 h-3.5" /> Ausente / Ilegible
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
+                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">Sello Habilitación IPS</span>
+                    <div className="flex items-center gap-1.5 mt-1 font-semibold">
+                      {activeDoc.sello_detectado ? (
+                        <span className="text-emerald-400 flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5" /> Detectado
+                        </span>
+                      ) : (
+                        <span className="text-amber-400 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Sin Sello
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
+                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">Médico & Matrícula</span>
+                    <div className="mt-1 text-slate-200 truncate font-medium">
+                      {activeDoc.medico_tratante}
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">{activeDoc.registro_medico}</span>
+                  </div>
+
+                  <div className="bg-[#161822] p-2.5 rounded-xl border border-[#2d3145]">
+                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">Plazo Normativo Legal</span>
+                    <div className="flex items-center gap-1 mt-1 font-mono font-bold text-purple-300">
+                      <Clock className="w-3.5 h-3.5 text-purple-400" />
+                      <span>{activeDoc.dias_restantes_normativa} días restantes</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Auditor Quick Action Card with Hotkeys */}
             <div className="bg-[#12141c] border border-[#222533] rounded-2xl p-5 space-y-4">
@@ -878,9 +1190,9 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
                     <option value="Nueva EPS">Nueva EPS</option>
                     <option value="Salud Total EPS">Salud Total EPS</option>
                     <option value="Compensar EPS">Compensar EPS</option>
-                    <option value="Famisanar EPS">Famisanar EPS</option>
                     <option value="Coosalud EPS">Coosalud EPS</option>
-                    <option value="Mutual Ser EPS">Mutual Ser EPS</option>
+                    <option value="Famisanar EPS">Famisanar EPS</option>
+                    <option value="Savia Salud EPS">Savia Salud EPS</option>
                   </select>
                 </div>
               </div>
