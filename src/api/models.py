@@ -85,4 +85,19 @@ class HospitalBatchIngestRequest(BaseModel):
     api_token: Optional[str] = None
     events: list[HospitalEventBatchItem]
 
+class DocumentQuestionRequest(BaseModel):
+    question: str = Field(..., min_length=2, description="Pregunta específica sobre el documento escaneado")
+
+class DocumentQuestionResponse(BaseModel):
+    document_id: str
+    question: str
+    answer: str
+    exact_quote: Optional[str] = None
+    target_category: str = "GENERAL"
+    confidence_score: float = 0.98
+    compressed_tokens: int = 150
+    source_engine: str = "Strata Core Local Precision Engine"
+    latency_ms: float = 0.5
+
+
 

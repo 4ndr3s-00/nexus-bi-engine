@@ -16,6 +16,8 @@ from src.api.models import (
     AuditorDecisionRequest,
     CustomDocumentCreateRequest,
     HospitalBatchIngestRequest,
+    DocumentQuestionRequest,
+    DocumentQuestionResponse,
     KPICard
 )
 from src.warehouse.engine import warehouse
@@ -25,6 +27,7 @@ from src.ai_engine.query_validator import guard, QueryValidationError
 from src.ai_engine.insight_generator import insight_generator
 from src.reporting.report_generator import StandaloneHtmlReportGenerator
 from src.strata_core.client import strata_client
+from src.strata_core.document_qa import document_qa
 from src.strata_core.document_store import document_store, MedicalDocumentItem
 
 router = APIRouter(prefix="/api/v1", tags=["Lakehouse & Healthcare Operations"])
@@ -599,6 +602,41 @@ async def create_custom_document_json(req: CustomDocumentCreateRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar documento: {str(e)}")
+
+@router.post("/documents/{doc_id}/ask", response_model=DocumentQuestionResponse)
+async def ask_scanned_document(doc_id: str, req: DocumentQuestionRequest):
+    """
+    Ultra-precise Q&A on a specific scanned medical document (PDF-Engine style).
+    Densifies document context (<350 tokens) and answers with exact textual citations.
+    """
+    doc = document_store.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail=f"Documento '{doc_id}' no encontrado en la cola de auditoría.")
+
+    qa_res = await document_qa.ask_document(
+        document_id=doc.id,
+        question=req.question,
+        document_text=doc.extracted_text,
+        metadata={
+            "cie10_code": doc.cie10_code,
+            "cie10_desc": doc.cie10_desc,
+            "medico_tratante": doc.medico_tratante,
+            "registro_medico": doc.registro_medico,
+            "valor_reclamado": doc.valor_reclamado,
+            "riesgo_glosa_detectado": doc.riesgo_glosa_detectado,
+            "motivo_alerta": doc.motivo_alerta,
+            "ips_emisora": doc.ips_emisora,
+            "eps_receptora": doc.eps_receptora,
+            "fecha_radicacion": doc.fecha_radicacion,
+            "dias_restantes_normativa": doc.dias_restantes_normativa,
+            "document_type": doc.document_type,
+            "firma_detectada": doc.firma_detectada,
+            "sello_detectado": doc.sello_detectado
+        }
+    )
+
+    return DocumentQuestionResponse(**qa_res.model_dump())
+
 
 # =============================================================
 # 4. ORIGINAL DASHBOARD OVERVIEW (BACKWARDS COMPATIBILITY)
