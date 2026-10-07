@@ -11,10 +11,11 @@ export default function Header({
   onSelectSuggestion
 }) {
   const suggestions = [
-    "Ventas y margen por categoría en 2025",
-    "Top 5 regiones con mayor margen",
-    "Rendimiento de AI & Intelligence",
-    "Tendencia trimestral de facturación"
+    "¿Cuál es el tiempo de espera promedio en Triage en los hospitales 24 horas?",
+    "Ocupación de camas UCI por sede hospitalaria",
+    "¿Qué EPS tiene mayor valor de glosas objetadas?",
+    "Oportunidad de citas en cardiología",
+    "Cuáles son los diagnósticos CIE-10 más frecuentes en urgencias"
   ];
 
   const handleSubmit = (e) => {
@@ -35,7 +36,7 @@ export default function Header({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Pregunta en lenguaje natural (ej: 'Ventas y margen neto por categoría en el 2025')..."
+              placeholder="Consulta a la IA: 'Tiempo de espera en Triage en hospitales 24h', 'Ocupación UCI', 'Glosas por EPS'..."
               className="w-full bg-[#151720] border border-[#232635] text-sm text-slate-100 placeholder-slate-500 rounded-2xl pl-11 pr-32 py-2.5 focus:outline-none focus:border-purple-500/60 focus:ring-1 focus:ring-purple-500/50 transition-all font-sans"
             />
             <button 
@@ -44,7 +45,7 @@ export default function Header({
               className="absolute right-1.5 px-4 py-1.5 bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-110 active:scale-95 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-purple-900/30 transition-all disabled:opacity-50"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>{isLoading ? 'Analizando...' : 'AI Query'}</span>
+              <span>{isLoading ? 'Analizando...' : 'AI Clinica'}</span>
             </button>
           </div>
         </form>
@@ -53,7 +54,7 @@ export default function Header({
         <div className="flex items-center gap-3 shrink-0">
           <button 
             onClick={onRefresh}
-            title="Refrescar métricas"
+            title="Refrescar métricas clínicas"
             className="p-2.5 rounded-xl border border-[#232635] bg-[#151720] text-slate-300 hover:text-white hover:bg-[#1a1d29] transition-all"
           >
             <RefreshCw className="w-4 h-4" />
@@ -61,18 +62,18 @@ export default function Header({
           <div className="h-6 w-px bg-[#232635]"></div>
           <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#151720] border border-[#232635] text-xs font-mono text-purple-300">
             <Clock className="w-3.5 h-3.5 text-purple-400" />
-            <span>Latencia: {latencyMs ? `${latencyMs}ms` : '38ms'}</span>
+            <span>OLAP: {latencyMs ? `${latencyMs}ms` : '32ms'}</span>
           </div>
         </div>
       </div>
 
       {/* Suggestion Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
-        <span className="text-slate-500 font-medium shrink-0">Sugerencias:</span>
+        <span className="text-slate-500 font-medium shrink-0">Preguntas sugeridas:</span>
         {suggestions.map((s, idx) => (
           <button
             key={idx}
-            onClick={() => onSelectSuggestion(s)}
+            onClick={() => onSelectSuggestion ? onSelectSuggestion(s) : onRunQuery(s)}
             className="px-2.5 py-1 rounded-lg bg-[#151720] hover:bg-[#1e212e] text-slate-300 hover:text-white border border-[#232635] shrink-0 transition-all text-[11px]"
           >
             {s}

@@ -1,46 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import KPICard from './components/KPICard';
-import TrendChart from './components/TrendChart';
-import CategoryChart from './components/CategoryChart';
+import HospitalDashboardView from './components/HospitalDashboardView';
+import DocumentAuditorView from './components/DocumentAuditorView';
 import ExecutiveReportView from './components/ExecutiveReportView';
 import LakehouseMonitor from './components/LakehouseMonitor';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState('hospital-bi');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   
-  // Dashboard state
-  const [overview, setOverview] = useState(null);
+  // Hospital and BI state
+  const [hospitalOverview, setHospitalOverview] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [lakehouseStats, setLakehouseStats] = useState(null);
 
-  // Load initial dashboard overview on mount
-  const fetchOverview = async () => {
+  // Load initial hospital overview on mount
+  const fetchHospitalOverview = async () => {
     try {
-      const res = await fetch('/api/v1/dashboard/overview');
+      const res = await fetch('/api/v1/hospital/overview');
       if (res.ok) {
         const data = await res.json();
-        setOverview(data);
+        setHospitalOverview(data);
       }
     } catch (err) {
-      console.error('Failed to load overview data:', err);
+      console.error('Failed to load hospital overview data:', err);
+    }
+  };
+
+  const fetchLakehouseStats = async () => {
+    try {
+      const res = await fetch('/api/v1/lakehouse/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setLakehouseStats(data.stats);
+      }
+    } catch (err) {
+      console.error('Failed to load lakehouse stats:', err);
     }
   };
 
   useEffect(() => {
-    fetchOverview();
+    fetchHospitalOverview();
+    fetchLakehouseStats();
   }, []);
 
-  // Handle Natural Language AI Query
+  // Handle Natural Language Clinical AI Query
   const handleRunQuery = async (searchQuery) => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/v1/report/generate', {
+      const res = await fetch('/api/v1/hospital/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: searchQuery })
@@ -59,17 +72,18 @@ export default function App() {
     }
   };
 
-  // Handle Seed 1M Records
+  // Handle Seed Clinical Lakehouse Data
   const handleSeedData = async () => {
     setIsSeeding(true);
     try {
       const res = await fetch('/api/v1/lakehouse/seed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ n_rows: 1000000 })
+        body: JSON.stringify({ n_rows: 400000 })
       });
       if (res.ok) {
-        await fetchOverview();
+        await fetchHospitalOverview();
+        await fetchLakehouseStats();
       }
     } catch (err) {
       console.error('Seeding error:', err);
@@ -86,78 +100,77 @@ export default function App() {
         setActiveSection={setActiveSection}
         onSeedData={handleSeedData}
         isSeeding={isSeeding}
-        lakehouseStats={overview?.lakehouse_stats}
+        lakehouseStats={lakehouseStats}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Top Header with AI Query Bar & Real-time Latency */}
+        {/* Top Header with Clinical AI Query Bar & Real-time Latency */}
         <Header 
           query={query}
           setQuery={setQuery}
           onRunQuery={handleRunQuery}
           isLoading={isLoading}
-          latencyMs={activeReport?.latency_ms || overview?.query_latency_ms}
-          onRefresh={fetchOverview}
+          latencyMs={activeReport?.latency_ms || hospitalOverview?.query_latency_ms}
+          onRefresh={() => {
+            fetchHospitalOverview();
+            fetchLakehouseStats();
+          }}
           onSelectSuggestion={(s) => {
             setQuery(s);
             handleRunQuery(s);
           }}
         />
 
-        {/* Dynamic Body Content */}
-        <div className="p-8 space-y-8 max-w-7xl w-full mx-auto">
-          {errorMsg && (
-            <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
-              <span>{errorMsg}</span>
-              <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-white font-bold ml-4">✕</button>
-            </div>
-          )}
+        {/* Global Error Banner */}
+        {errorMsg && (
+          <div className="mx-8 mt-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center justify-between">
+            <span>{errorMsg}</span>
+            <button onClick={() => setErrorMsg(null)} className="underline ml-4">Cerrar</button>
+          </div>
+        )}
 
-          {/* AI Executive Report View (When active) */}
-          {activeSection === 'ai-report' && activeReport && (
-            <ExecutiveReportView 
-              report={activeReport} 
-              onClose={() => setActiveSection('dashboard')} 
+        {/* Section View Routing */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {activeSection === 'hospital-bi' && (
+            <HospitalDashboardView 
+              hospitalData={hospitalOverview} 
+              onRunQuery={handleRunQuery}
+              isLoading={isLoading}
             />
           )}
 
-          {/* Medallion Lakehouse View */}
-          {activeSection === 'lakehouse' && (
-            <LakehouseMonitor stats={overview?.lakehouse_stats} />
+          {activeSection === 'strata-auditor' && (
+            <DocumentAuditorView 
+              onRefreshOverview={fetchHospitalOverview} 
+            />
           )}
 
-          {/* General Executive Dashboard View */}
-          {activeSection === 'dashboard' && (
-            <>
-              {/* Row of 4 KPI Cards - Inspired directly by reference UI */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                {overview?.kpis?.map((kpi, idx) => (
-                  <KPICard
-                    key={idx}
-                    label={kpi.label}
-                    value={kpi.value}
-                    change={kpi.change}
-                    trend={kpi.trend}
-                    subtext={
-                      idx === 0 ? 'Facturación total acumulada' :
-                      idx === 1 ? 'Margen calculado en capa Gold' :
-                      idx === 2 ? 'Transacciones en Lakehouse' :
-                      'Cómputo en memoria con DuckDB'
-                    }
-                  />
-                ))}
-              </div>
+          {activeSection === 'ai-report' && (
+            <ExecutiveReportView 
+              report={activeReport}
+              onBack={() => setActiveSection('hospital-bi')}
+              onExportHtml={async () => {
+                const res = await fetch('/api/v1/report/export-html', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ question: activeReport?.question || '' })
+                });
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Informe_Clinico_Nexus_BI.html`;
+                a.click();
+              }}
+            />
+          )}
 
-              {/* Main Charts Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TrendChart data={overview?.monthly_trend} />
-                <CategoryChart data={overview?.category_breakdown} />
-              </div>
-
-              {/* In-page Medallion Monitor for single-page unified fluid experience */}
-              <LakehouseMonitor stats={overview?.lakehouse_stats} />
-            </>
+          {activeSection === 'lakehouse' && (
+            <LakehouseMonitor 
+              stats={lakehouseStats} 
+              onRefresh={fetchLakehouseStats}
+            />
           )}
         </div>
       </main>
