@@ -73,3 +73,16 @@ class CustomDocumentCreateRequest(BaseModel):
     raw_text: str = ""
     prioridad: str = "Media"
 
+class HospitalEventBatchItem(BaseModel):
+    event_type: str = Field(..., description="'admission', 'bed_census', 'glosa', 'appointment'")
+    ips_id: int = 1
+    eps_id: int = 1
+    date_id: int = 20261001
+    payload: dict[str, Any]
+
+class HospitalBatchIngestRequest(BaseModel):
+    source_system: str = Field(..., description="EHR/HIS name (e.g. 'SAP Health', 'Cerner', 'Dinámica')")
+    api_token: Optional[str] = None
+    events: list[HospitalEventBatchItem]
+
+

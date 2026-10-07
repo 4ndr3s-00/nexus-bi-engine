@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8080
     
+    # Ingestion Gateway Configuration
+    DATA_SOURCE_PROVIDER: str = "mock"  # "mock", "rest", "webhook"
+    EHR_API_BASE_URL: str = "http://localhost:9000/api/v1/ehr"
+    EHR_API_KEY: str = ""
+    INGESTION_WEBHOOK_SECRET: str = "dev-secret-key-nexus"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

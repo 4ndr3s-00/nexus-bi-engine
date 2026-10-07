@@ -5,7 +5,7 @@ from rich.console import Console
 from src.config import settings
 from src.warehouse.engine import warehouse
 from src.warehouse.schema import initialize_gold_schema
-from src.ingestion.synthetic_generator import generate_healthcare_dimensions, generate_massive_hospital_events
+from src.ingestion.gateway import ingestion_gateway
 
 console = Console()
 
@@ -13,23 +13,25 @@ class MedallionPipeline:
     """
     Executes the End-to-End Medallion Lakehouse Pipeline for 8 EPS/IPS 24/7 Operations:
     Bronze (Raw Staging) -> Silver (Cleaned/De-identified Parquet) -> Gold (Healthcare Star Schema in DuckDB).
+    Decoupled via IngestionGateway (supports Mock, REST EHR and Webhook providers).
     """
     def __init__(self):
         self.bronze_dir = settings.BRONZE_DIR
         self.silver_dir = settings.SILVER_DIR
         self.gold_dir = settings.GOLD_DIR
 
-    def run_pipeline(self, n_urgencias: int = 400_000, n_rows: int = None) -> dict:
+    def run_pipeline(self, n_urgencias: int = 400_000, n_rows: int = None, provider: str = None) -> dict:
         if n_rows is not None:
             n_urgencias = n_rows
         console.print(f"[bold magenta]▶ Starting Healthcare Medallion Pipeline for 8 EPS/IPS ({n_urgencias:,} Urgencias)...[/bold magenta]")
         start_time = time.time()
         
-        # 1. BRONZE LAYER: Raw Staging
+        # 1. BRONZE LAYER: Raw Staging via Ingestion Gateway
         t0 = time.time()
-        console.print("[cyan][Bronze][/cyan] Ingesting clinical dimensions and raw hospital admissions...")
-        dims = generate_healthcare_dimensions()
-        facts = generate_massive_hospital_events(n_urgencias=n_urgencias, dims=dims)
+        console.print("[cyan][Bronze][/cyan] Ingesting clinical dimensions and raw hospital admissions via Gateway...")
+        gateway_data = ingestion_gateway.load_all_events(n_urgencias=n_urgencias, provider=provider)
+        dims = gateway_data["dimensions"]
+        facts = gateway_data["facts"]
         
         bronze_file = self.bronze_dir / "raw_hospital_events.parquet"
         facts["fact_urgencias_triage"].write_parquet(bronze_file, compression="snappy")

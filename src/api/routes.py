@@ -15,6 +15,7 @@ from src.api.models import (
     DocumentEvaluateRequest,
     AuditorDecisionRequest,
     CustomDocumentCreateRequest,
+    HospitalBatchIngestRequest,
     KPICard
 )
 from src.warehouse.engine import warehouse
@@ -54,6 +55,90 @@ async def seed_lakehouse(req: SeedRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")
+
+@router.post("/ingest/hospital-events")
+async def ingest_external_hospital_events(req: HospitalBatchIngestRequest):
+    """
+    Ingests live clinical events (admissions, beds, glosas, appointments) from external HIS/EHR
+    via Push/Webhook mode directly into the Medallion Gold Layer in DuckDB.
+    """
+    t0 = time.perf_counter()
+    if not req.events:
+        raise HTTPException(status_code=400, detail="El lote de eventos clínicos está vacío.")
+
+    processed = 0
+    with warehouse.get_connection(read_only=False) as con:
+        for item in req.events:
+            ev_type = item.event_type.lower()
+            p = item.payload
+            if ev_type == "admission":
+                con.execute(f"""
+                INSERT OR REPLACE INTO fact_urgencias_triage VALUES (
+                    {p.get("admission_id", int(time.time() * 1000) + processed)},
+                    {item.ips_id},
+                    {item.eps_id},
+                    '{p.get("paciente_hash", "PAC-ANON")}',
+                    {item.date_id},
+                    {int(p.get("hora_ingreso", 14))},
+                    {int(p.get("triage_level", 3))},
+                    {int(p.get("tiempo_espera_minutos", 25))},
+                    {float(p.get("tiempo_estancia_horas", 4.5))},
+                    '{p.get("cie10_code", "J069")}',
+                    {str(bool(p.get("reingreso_72h", False))).lower()},
+                    '{p.get("destino_alta", "Domicilio")}'
+                );
+                """)
+                processed += 1
+            elif ev_type == "bed_census":
+                con.execute(f"""
+                INSERT OR REPLACE INTO fact_censo_camas VALUES (
+                    {p.get("census_id", int(time.time() * 1000) + processed)},
+                    {item.ips_id},
+                    {item.date_id},
+                    '{p.get("servicio", "UCI Adulto")}',
+                    {int(p.get("camas_totales", 30))},
+                    {int(p.get("camas_ocupadas", 25))},
+                    {float(p.get("tasa_ocupacion_pct", 83.33))}
+                );
+                """)
+                processed += 1
+            elif ev_type == "glosa":
+                con.execute(f"""
+                INSERT OR REPLACE INTO fact_auditoria_glosas VALUES (
+                    {p.get("glosa_id", int(time.time() * 1000) + processed)},
+                    {item.ips_id},
+                    {item.eps_id},
+                    {item.date_id},
+                    {float(p.get("valor_radicado", 1500000.0))},
+                    {float(p.get("valor_glosado", 250000.0))},
+                    {float(p.get("valor_levantado", 0.0))},
+                    '{p.get("motivo_glosa_codigo", "GL-04")}',
+                    '{p.get("estado_glosa", "Glosada")}'
+                );
+                """)
+                processed += 1
+            elif ev_type == "appointment":
+                con.execute(f"""
+                INSERT OR REPLACE INTO fact_citas_oportunidad VALUES (
+                    {p.get("cita_id", int(time.time() * 1000) + processed)},
+                    {item.ips_id},
+                    {item.date_id},
+                    '{p.get("especialidad", "Cardiología")}',
+                    {int(p.get("dias_oportunidad", 4))},
+                    {str(bool(p.get("cumple_meta_normativa", True))).lower()}
+                );
+                """)
+                processed += 1
+
+    latency = round((time.perf_counter() - t0) * 1000, 2)
+    return {
+        "status": "success",
+        "source_system": req.source_system,
+        "events_received": len(req.events),
+        "events_ingested": processed,
+        "latency_ms": latency,
+        "message": f"Sincronizados {processed} eventos clínicos desde {req.source_system} a la capa Gold."
+    }
 
 @router.post("/query")
 async def execute_query(req: NaturalQueryRequest):
