@@ -64,3 +64,12 @@ class AuditorDecisionRequest(BaseModel):
     auditor_name: str = "Auditor EPS"
     motivo_glosa: Optional[str] = None
     observaciones: Optional[str] = None
+
+class CustomDocumentCreateRequest(BaseModel):
+    document_type: str = "Factura RIPS"
+    ips_emisora: str = "Hospital Universitario Central"
+    eps_receptora: str = "Sura EPS"
+    valor_reclamado: float = 1_500_000.0
+    raw_text: str = ""
+    prioridad: str = "Media"
+

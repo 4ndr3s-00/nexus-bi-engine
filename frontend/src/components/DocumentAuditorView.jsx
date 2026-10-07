@@ -23,7 +23,10 @@ import {
   HelpCircle,
   Activity,
   Calendar,
-  Sparkles
+  Sparkles,
+  Upload,
+  FileUp,
+  Plus
 } from 'lucide-react';
 
 export default function DocumentAuditorView({ onRefreshOverview }) {
@@ -40,6 +43,107 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
   const [motivoGlosa, setMotivoGlosa] = useState('GL-04 Autorización o radicación extemporánea');
   const [observacionAuditor, setObservacionAuditor] = useState('');
   const [actionSuccessMsg, setActionSuccessMsg] = useState(null);
+
+  // Modal for Uploading Custom Documents
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [docTypeInput, setDocTypeInput] = useState('Factura RIPS');
+  const [ipsInput, setIpsInput] = useState('Hospital Universitario Central');
+  const [epsInput, setEpsInput] = useState('Sura EPS');
+  const [valorInput, setValorInput] = useState(1850000);
+  const [clinicalTextInput, setClinicalTextInput] = useState('');
+  const [uploadError, setUploadError] = useState(null);
+
+  // Quick sample templates for testing perception
+  const sampleTemplates = [
+    {
+      name: 'Factura RIPS Válida',
+      type: 'Factura RIPS',
+      ips: 'Hospital Universitario Central',
+      eps: 'Sura EPS',
+      valor: 2450000,
+      text: 'FACTURA RIPS FC-9081\nIPS: HOSPITAL UNIVERSITARIO CENTRAL - NIT 890.980.123-1\nPACIENTE: JUAN PÉREZ - EDAD 52\nDIAGNÓSTICO: I10 HIPERTENSIÓN ESENCIAL PRIMARIA\nSERVICIO: OBSERVACIÓN URGENCIAS Y MEDICACIÓN CARDIOVASCULAR\nMEDICO TRATANTE: DRA. VALENTINA MORALES VELEZ - RM-482910\nFIRMA: DIGITAL AUTORIZADA | SELLO DE HABILITACIÓN ACTIVO'
+    },
+    {
+      name: 'Incapacidad Médica (Sin Firma - Glosa)',
+      type: 'Incapacidad Médica',
+      ips: 'Clínica Norte 24H',
+      eps: 'Sanitas EPS',
+      valor: 480000,
+      text: 'CERTIFICADO DE INCAPACIDAD TEMPORAL NO. INC-2026-99\nCLÍNICA NORTE 24H\nDIAGNÓSTICO J069 INFECCIÓN RESPIRATORIA AGUDA\nDÍAS DE INCAPACIDAD: 5 DÍAS\nATENCIÓN SIN FIRMA DEL ESPECIALISTA. ILEGIBLE.'
+    },
+    {
+      name: 'Radicación Extemporánea (>30 días)',
+      type: 'Factura RIPS',
+      ips: 'Hospital San Vicente de Paul',
+      eps: 'Nueva EPS',
+      valor: 5800000,
+      text: 'COBRO QUIRÚRGICO DE APENDICECTOMÍA K358\nATENCIÓN REALIZADA EL 15 DE JULIO (RADICACIÓN EXTEMPORÁNEA REPORTADA HACE 70 DÍAS).\nMEDICO: DR. SERGIO RAMÍREZ - RM-319082\nFIRMA: PRESENTE | SELLO: PRESENTE'
+    },
+    {
+      name: 'Inconsistencia Diagnóstico vs Procedimiento',
+      type: 'Orden de Procedimiento',
+      ips: 'Centro Ambulatorio Especializado Sur',
+      eps: 'Compensar EPS',
+      valor: 1350000,
+      text: 'SOLICITUD DE RESONANCIA MAGNÉTICA CEREBRAL CONTRASTADA\nDIAGNÓSTICO R104 DOLOR ABDOMINAL AGUDO (INCONSISTENCIA CLÍNICA DETECTADA: ORDEN NEUROLÓGICA CON DIAGNÓSTICO ABDOMINAL)\nDRA. CAMILA RESTREPO - RM-992144\nFIRMA DIGITAL VALIDA'
+    }
+  ];
+
+  const handleApplyTemplate = (tpl) => {
+    setDocTypeInput(tpl.type);
+    setIpsInput(tpl.ips);
+    setEpsInput(tpl.eps);
+    setValorInput(tpl.valor);
+    setClinicalTextInput(tpl.text);
+  };
+
+  const handleUploadDocument = async (e) => {
+    e?.preventDefault();
+    setUploadLoading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      if (uploadFile) {
+        formData.append('file', uploadFile);
+      }
+      formData.append('document_type', docTypeInput);
+      formData.append('ips_emisora', ipsInput);
+      formData.append('eps_receptora', epsInput);
+      formData.append('valor_reclamado', valorInput);
+      if (clinicalTextInput) {
+        formData.append('raw_text', clinicalTextInput);
+      }
+      formData.append('prioridad', 'Alta');
+
+      const res = await fetch('/api/v1/documents/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Error al radicar documento');
+      }
+
+      const data = await res.json();
+      const newDoc = data.document;
+
+      // Prepend to current list and select it
+      setDocuments(prev => [newDoc, ...prev]);
+      setSelectedDocId(newDoc.id);
+      setShowUploadModal(false);
+      setUploadFile(null);
+      setClinicalTextInput('');
+      setActionSuccessMsg(`¡Documento radicado exitosamente! ${newDoc.numero_radicado} analizado por Strata Core.`);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } catch (err) {
+      setUploadError(err.message);
+    } finally {
+      setUploadLoading(false);
+    }
+  };
 
   // Fetch documents from API
   const fetchDocuments = async () => {
@@ -185,6 +289,15 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
           <div className="text-[11px] text-slate-500 font-mono bg-[#11131a] border border-[#222533] px-3 py-2 rounded-xl">
             {documents.length} radicados
           </div>
+
+          {/* Radicar Mi Documento Button */}
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-110 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-md shadow-purple-900/30 transition-all shrink-0 cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Radicar Mi Documento</span>
+          </button>
         </div>
       </div>
 
@@ -215,7 +328,14 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-mono text-purple-400 font-semibold">{doc.numero_radicado}</span>
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-[11px] font-mono text-purple-400 font-semibold">{doc.numero_radicado}</span>
+                  {doc.is_user_uploaded && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      Propio
+                    </span>
+                  )}
+                </div>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                   doc.estado === 'Aprobado' ? 'bg-emerald-500/20 text-emerald-400' :
                   doc.estado === 'Glosado' ? 'bg-rose-500/20 text-rose-400' :
@@ -290,6 +410,21 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
                 <pre className="w-full h-full text-xs font-mono text-slate-300 bg-[#161822] p-4 rounded-xl border border-[#2d3145] whitespace-pre-wrap overflow-y-auto">
                   {activeDoc.extracted_text}
                 </pre>
+              ) : activeDoc.image_url ? (
+                <div 
+                  style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
+                  className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl transition-transform border border-slate-700 bg-black flex flex-col items-center"
+                >
+                  <img 
+                    src={activeDoc.image_url} 
+                    alt="Documento Adjunto" 
+                    className="w-full h-auto object-contain max-h-[620px] rounded-t-2xl" 
+                  />
+                  <div className="w-full bg-[#161822] p-3 text-center border-t border-slate-800 text-xs text-slate-300 flex items-center justify-between px-4">
+                    <span className="font-mono text-purple-400 font-bold">{activeDoc.numero_radicado}</span>
+                    <span className="text-slate-400 truncate max-w-[220px]">{activeDoc.file_name || 'Imagen Escaneada'}</span>
+                  </div>
+                </div>
               ) : (
                 <div 
                   style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
@@ -299,7 +434,14 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
                   <div className="border-b-2 border-slate-800 pb-4 mb-4">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-extrabold text-sm uppercase tracking-wide text-slate-900">{activeDoc.ips_emisora}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-extrabold text-sm uppercase tracking-wide text-slate-900">{activeDoc.ips_emisora}</h3>
+                          {activeDoc.is_user_uploaded && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                              Cargado por Auditor
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-600 font-mono">NIT: 890.980.123-1 | RESOLUCIÓN HABILITACIÓN 0489</p>
                         <p className="text-[10px] text-slate-600">Sede Principal - Servicios de Salud y Urgencias 24 Horas</p>
                       </div>
@@ -587,6 +729,201 @@ export default function DocumentAuditorView({ onRefreshOverview }) {
                 Confirmar Glosa
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Uploading Custom Document */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#151722] border border-[#2d3145] rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-fadeIn my-8 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#232635]">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Radicar Nuevo Documento Médico
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      Motor Strata Core
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Sube un archivo (PDF, imagen JPG/PNG, o texto) para análisis y auditoría inmediata.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowUploadModal(false)}
+                className="text-slate-400 hover:text-white text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {uploadError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                {uploadError}
+              </div>
+            )}
+
+            {/* Quick Templates Buttons */}
+            <div>
+              <span className="text-xs font-semibold text-slate-400 block mb-2">
+                Opciones Rápidas / Plantillas de Prueba Asistencial:
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {sampleTemplates.map((tpl, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleApplyTemplate(tpl)}
+                    className="text-left p-2.5 rounded-xl bg-[#1c1f2e] hover:bg-purple-900/20 border border-[#2d3145] hover:border-purple-500/40 text-xs text-slate-300 transition-all flex flex-col justify-between"
+                  >
+                    <span className="font-semibold text-white">{tpl.name}</span>
+                    <span className="text-[10px] text-purple-400 mt-1 font-mono">{tpl.type} • {tpl.eps}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upload Form */}
+            <form onSubmit={handleUploadDocument} className="space-y-4">
+              {/* File Dropzone */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Archivo Adjunto (PDF, Imagen PNG/JPG o TXT)
+                </label>
+                <div className="border-2 border-dashed border-[#2d3145] hover:border-purple-500/50 rounded-2xl p-4 text-center bg-[#131520] transition-colors relative cursor-pointer">
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"
+                    onChange={(e) => setUploadFile(e.target.files[0] || null)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="flex flex-col items-center gap-1.5 pointer-events-none">
+                    <FileUp className="w-8 h-8 text-purple-400" />
+                    <span className="text-xs font-medium text-slate-300">
+                      {uploadFile ? (
+                        <span className="text-emerald-400 font-semibold">{uploadFile.name} ({(uploadFile.size / 1024).toFixed(1)} KB)</span>
+                      ) : (
+                        'Arrastra tu archivo aquí o haz clic para explorar'
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Formatos soportados: PDF, PNG, JPG, JPEG, TXT
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid: Document Type, IPS, EPS, Amount */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Tipo de Documento</label>
+                  <select
+                    value={docTypeInput}
+                    onChange={(e) => setDocTypeInput(e.target.value)}
+                    className="w-full bg-[#1c1f2e] border border-[#2d3145] text-xs text-slate-200 rounded-xl p-2.5 outline-none focus:border-purple-500"
+                  >
+                    <option value="Factura RIPS">Factura RIPS</option>
+                    <option value="Incapacidad Médica">Incapacidad Médica</option>
+                    <option value="Fórmula Médica">Fórmula Médica</option>
+                    <option value="Orden de Procedimiento">Orden de Procedimiento</option>
+                    <option value="Historia Clínica">Historia Clínica</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Valor Reclamado (COP)</label>
+                  <input
+                    type="number"
+                    value={valorInput}
+                    onChange={(e) => setValorInput(Number(e.target.value))}
+                    min="0"
+                    step="50000"
+                    className="w-full bg-[#1c1f2e] border border-[#2d3145] text-xs text-slate-200 rounded-xl p-2.5 outline-none focus:border-purple-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">IPS Emisora (Red Prestadora)</label>
+                  <select
+                    value={ipsInput}
+                    onChange={(e) => setIpsInput(e.target.value)}
+                    className="w-full bg-[#1c1f2e] border border-[#2d3145] text-xs text-slate-200 rounded-xl p-2.5 outline-none focus:border-purple-500"
+                  >
+                    <option value="Hospital Universitario Central">Hospital Universitario Central</option>
+                    <option value="Clínica Norte 24H">Clínica Norte 24H</option>
+                    <option value="Hospital San Vicente de Paul">Hospital San Vicente de Paul</option>
+                    <option value="Centro Ambulatorio Especializado Sur">Centro Ambulatorio Especializado Sur</option>
+                    <option value="Clínica Pediátrica Infantil 24H">Clínica Pediátrica Infantil 24H</option>
+                    <option value="Hospital Materno Infantil">Hospital Materno Infantil</option>
+                    <option value="Clínica Metropolitana Sur">Clínica Metropolitana Sur</option>
+                    <option value="Instituto Cardiovascular de Occidente">Instituto Cardiovascular de Occidente</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">EPS Pagadora (Aseguradora)</label>
+                  <select
+                    value={epsInput}
+                    onChange={(e) => setEpsInput(e.target.value)}
+                    className="w-full bg-[#1c1f2e] border border-[#2d3145] text-xs text-slate-200 rounded-xl p-2.5 outline-none focus:border-purple-500"
+                  >
+                    <option value="Sura EPS">Sura EPS</option>
+                    <option value="Sanitas EPS">Sanitas EPS</option>
+                    <option value="Nueva EPS">Nueva EPS</option>
+                    <option value="Salud Total EPS">Salud Total EPS</option>
+                    <option value="Compensar EPS">Compensar EPS</option>
+                    <option value="Famisanar EPS">Famisanar EPS</option>
+                    <option value="Coosalud EPS">Coosalud EPS</option>
+                    <option value="Mutual Ser EPS">Mutual Ser EPS</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Clinical Text Area */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-semibold text-slate-300 block">
+                    Texto / Contenido Clínico Escaneado
+                  </label>
+                  <span className="text-[10px] text-slate-500">
+                    {uploadFile ? '(Opcional: Si se adjunta archivo, se extraerá automáticamente)' : '(Obligatorio si no adjuntas archivo)'}
+                  </span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={clinicalTextInput}
+                  onChange={(e) => setClinicalTextInput(e.target.value)}
+                  placeholder="Pega aquí el contenido textual de la factura, diagnóstico CIE-10, médico tratante, registro o soportes..."
+                  className="w-full bg-[#1c1f2e] border border-[#2d3145] text-xs text-slate-200 rounded-xl p-3 outline-none focus:border-purple-500 font-mono"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#232635]">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(false)}
+                  disabled={uploadLoading}
+                  className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-[#202330] transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploadLoading || (!uploadFile && !clinicalTextInput.trim())}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-110 active:scale-95 text-white shadow-lg shadow-purple-900/30 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${uploadLoading ? 'animate-spin' : ''}`} />
+                  <span>{uploadLoading ? 'Procesando en Strata Core...' : 'Radicar & Analizar'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

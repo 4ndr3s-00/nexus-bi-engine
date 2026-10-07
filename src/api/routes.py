@@ -1,6 +1,11 @@
 import time
+import base64
+import io
+import uuid
+import datetime
+import hashlib
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File, Form
 from src.api.models import (
     SeedRequest,
     NaturalQueryRequest,
@@ -9,6 +14,7 @@ from src.api.models import (
     HospitalOverviewResponse,
     DocumentEvaluateRequest,
     AuditorDecisionRequest,
+    CustomDocumentCreateRequest,
     KPICard
 )
 from src.warehouse.engine import warehouse
@@ -18,7 +24,7 @@ from src.ai_engine.query_validator import guard, QueryValidationError
 from src.ai_engine.insight_generator import insight_generator
 from src.reporting.report_generator import StandaloneHtmlReportGenerator
 from src.strata_core.client import strata_client
-from src.strata_core.document_store import document_store
+from src.strata_core.document_store import document_store, MedicalDocumentItem
 
 router = APIRouter(prefix="/api/v1", tags=["Lakehouse & Healthcare Operations"])
 
@@ -336,6 +342,178 @@ async def record_auditor_decision(req: AuditorDecisionRequest):
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/documents/upload")
+async def upload_document_for_audit(
+    file: Optional[UploadFile] = File(None),
+    document_type: str = Form("Factura RIPS"),
+    ips_emisora: str = Form("Hospital Universitario Central"),
+    eps_receptora: str = Form("Sura EPS"),
+    valor_reclamado: float = Form(1500000.0),
+    raw_text: Optional[str] = Form(None),
+    prioridad: str = Form("Media")
+):
+    """
+    Uploads a custom medical document (PDF, Image PNG/JPG, TXT, or manual clinical text),
+    runs perception analysis through Strata Core (or resilient fallback), and queues it
+    for immediate split-screen auditor review.
+    """
+    try:
+        doc_uid = uuid.uuid4().hex[:6].upper()
+        doc_id = f"DOC-USR-{doc_uid}"
+        radicado_no = f"RAD-USR-{int(time.time()) % 100000:05d}"
+        
+        text = (raw_text or "").strip()
+        image_url = None
+        filename = None
+        
+        if file is not None:
+            filename = file.filename
+            content = await file.read()
+            lower_name = (file.filename or "").lower()
+            
+            if lower_name.endswith(".pdf"):
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(io.BytesIO(content))
+                    extracted_pages = [page.extract_text() or "" for page in reader.pages]
+                    extracted = "\n".join(extracted_pages).strip()
+                    if extracted:
+                        text = f"{text}\n\n{extracted}" if text else extracted
+                except Exception:
+                    if not text:
+                        text = f"DOCUMENTO PDF ADJUNTO: {file.filename}\nExtracción asistida activa."
+            elif any(lower_name.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"]):
+                content_type = file.content_type or ("image/jpeg" if lower_name.endswith((".jpg", ".jpeg")) else "image/png")
+                b64 = base64.b64encode(content).decode("ascii")
+                image_url = f"data:{content_type};base64,{b64}"
+                if not text:
+                    text = f"DOCUMENTO IMAGEN ESCANEADA: {file.filename}\nSoporte asistencial digitalizado para {document_type}.\nIPS: {ips_emisora} | EPS: {eps_receptora}."
+            else:
+                try:
+                    decoded = content.decode("utf-8", errors="ignore").strip()
+                    if decoded:
+                        text = f"{text}\n\n{decoded}" if text else decoded
+                except Exception:
+                    pass
+
+        if not text:
+            text = f"RADICACIÓN MÉDICA {radicado_no}\nDOCUMENTO: {document_type}\nIPS: {ips_emisora}\nEPS: {eps_receptora}\nVALOR RECLAMADO: ${valor_reclamado:,.2f} COP\nSoporte médico clínico radicado para auditoría."
+
+        # Evaluate with Strata Core perception engine
+        extraction = await strata_client.evaluate_scanned_document(
+            document_id=doc_id,
+            document_type=document_type,
+            raw_text=text,
+            ips_name=ips_emisora,
+            eps_name=eps_receptora
+        )
+
+        has_risk = not extraction.consistencia_clinica or bool(extraction.glosa_sugerida)
+        motivo_alerta = extraction.alerta_riesgo or extraction.glosa_sugerida
+
+        new_doc = MedicalDocumentItem(
+            id=doc_id,
+            numero_radicado=radicado_no,
+            document_type=document_type,
+            ips_emisora=ips_emisora,
+            eps_receptora=eps_receptora,
+            paciente_hash=f"PAC-{hashlib.sha256((str(time.time()) + doc_id).encode()).hexdigest()[:12]}",
+            fecha_radicacion=datetime.date.today().isoformat(),
+            valor_reclamado=float(valor_reclamado),
+            estado="Pendiente",
+            prioridad=prioridad or "Media",
+            dias_restantes_normativa=30,
+            extracted_text=text,
+            cie10_code=extraction.diagnostico_cie10_code,
+            cie10_desc=extraction.diagnostico_cie10_desc,
+            medico_tratante=extraction.medico_tratante,
+            registro_medico=extraction.registro_medico,
+            sello_detectado=extraction.sello_detectado,
+            firma_detectada=extraction.firma_detectada,
+            riesgo_glosa_detectado=has_risk,
+            motivo_alerta=motivo_alerta,
+            confidence_score=extraction.confidence_score,
+            image_url=image_url,
+            file_name=filename,
+            is_user_uploaded=True
+        )
+
+        document_store.add_document(new_doc)
+
+        return {
+            "status": "success",
+            "message": f"Documento radicado exitosamente con número {radicado_no} y analizado con Strata Core.",
+            "document": new_doc.model_dump()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar documento: {str(e)}")
+
+@router.post("/documents/custom")
+async def create_custom_document_json(req: CustomDocumentCreateRequest):
+    """
+    Creates a custom medical document from JSON payload,
+    evaluates it with Strata Core and queues it for auditing.
+    """
+    try:
+        doc_uid = uuid.uuid4().hex[:6].upper()
+        doc_id = f"DOC-USR-{doc_uid}"
+        radicado_no = f"RAD-USR-{int(time.time()) % 100000:05d}"
+        
+        text = req.raw_text.strip() if req.raw_text else (
+            f"RADICACIÓN MÉDICA {radicado_no}\n"
+            f"DOCUMENTO: {req.document_type}\n"
+            f"IPS: {req.ips_emisora}\n"
+            f"EPS: {req.eps_receptora}\n"
+            f"VALOR RECLAMADO: ${req.valor_reclamado:,.2f} COP\n"
+            f"Soporte clínico en regla."
+        )
+
+        extraction = await strata_client.evaluate_scanned_document(
+            document_id=doc_id,
+            document_type=req.document_type,
+            raw_text=text,
+            ips_name=req.ips_emisora,
+            eps_name=req.eps_receptora
+        )
+
+        has_risk = not extraction.consistencia_clinica or bool(extraction.glosa_sugerida)
+        motivo_alerta = extraction.alerta_riesgo or extraction.glosa_sugerida
+
+        new_doc = MedicalDocumentItem(
+            id=doc_id,
+            numero_radicado=radicado_no,
+            document_type=req.document_type,
+            ips_emisora=req.ips_emisora,
+            eps_receptora=req.eps_receptora,
+            paciente_hash=f"PAC-{hashlib.sha256((str(time.time()) + doc_id).encode()).hexdigest()[:12]}",
+            fecha_radicacion=datetime.date.today().isoformat(),
+            valor_reclamado=float(req.valor_reclamado),
+            estado="Pendiente",
+            prioridad=req.prioridad or "Media",
+            dias_restantes_normativa=30,
+            extracted_text=text,
+            cie10_code=extraction.diagnostico_cie10_code,
+            cie10_desc=extraction.diagnostico_cie10_desc,
+            medico_tratante=extraction.medico_tratante,
+            registro_medico=extraction.registro_medico,
+            sello_detectado=extraction.sello_detectado,
+            firma_detectada=extraction.firma_detectada,
+            riesgo_glosa_detectado=has_risk,
+            motivo_alerta=motivo_alerta,
+            confidence_score=extraction.confidence_score,
+            is_user_uploaded=True
+        )
+
+        document_store.add_document(new_doc)
+
+        return {
+            "status": "success",
+            "message": f"Documento radicado exitosamente con número {radicado_no}.",
+            "document": new_doc.model_dump()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al registrar documento: {str(e)}")
 
 # =============================================================
 # 4. ORIGINAL DASHBOARD OVERVIEW (BACKWARDS COMPATIBILITY)

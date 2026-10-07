@@ -109,3 +109,53 @@ def test_documents_decision_workflow_and_glosa_sync():
     assert data["status"] == "success"
     assert data["document"]["estado"] == "Glosado"
     assert len(data["document"]["historial_auditoria"]) >= 1
+
+def test_documents_custom_json_create():
+    """Verify POST /api/v1/documents/custom creates document, runs Strata Core and queues it."""
+    payload = {
+        "document_type": "Factura RIPS",
+        "ips_emisora": "Clínica Norte 24H",
+        "eps_receptora": "Sanitas EPS",
+        "valor_reclamado": 3500000.0,
+        "raw_text": "DIAGNÓSTICO J069 INFECCIÓN RESPIRATORIA AGUDA. DR. CARLOS GÓMEZ RM-771829. SIN FIRMA",
+        "prioridad": "Alta"
+    }
+    res = client.post("/api/v1/documents/custom", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    doc = data["document"]
+    assert "RAD-USR" in doc["numero_radicado"]
+    assert doc["is_user_uploaded"] is True
+    assert doc["cie10_code"] == "J069"
+    assert doc["riesgo_glosa_detectado"] is True  # Because 'SIN FIRMA' triggers glosa risk
+    
+    # Verify it is in the queue at the front
+    pending_res = client.get("/api/v1/documents/pending")
+    assert pending_res.status_code == 200
+    pending_docs = pending_res.json()["documents"]
+    assert any(d["id"] == doc["id"] for d in pending_docs)
+
+def test_documents_upload_multipart_form():
+    """Verify POST /api/v1/documents/upload handles multipart upload with custom text/file."""
+    form_data = {
+        "document_type": "Incapacidad Médica",
+        "ips_emisora": "Hospital San Vicente de Paul",
+        "eps_receptora": "Nueva EPS",
+        "valor_reclamado": "650000.0",
+        "raw_text": "INCAPACIDAD MÉDICA POR 5 DÍAS. DIAGNÓSTICO I10. DRA. VALENTINA MORALES RM-482910.",
+        "prioridad": "Alta"
+    }
+    # Upload with a small text file
+    files = {
+        "file": ("incapacidad_firmada.txt", b"CERTIFICADO MEDICO FIRMADO DIGITALMENTE VALIDO", "text/plain")
+    }
+    res = client.post("/api/v1/documents/upload", data=form_data, files=files)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    doc = data["document"]
+    assert doc["file_name"] == "incapacidad_firmada.txt"
+    assert doc["is_user_uploaded"] is True
+    assert doc["cie10_code"] == "I10"
+

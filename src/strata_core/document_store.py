@@ -39,6 +39,11 @@ class MedicalDocumentItem(BaseModel):
     # Decision history
     historial_auditoria: List[AuditorDecision] = []
 
+    # Custom upload metadata
+    image_url: Optional[str] = None
+    file_name: Optional[str] = None
+    is_user_uploaded: bool = False
+
 class MedicalDocumentStore:
     """
     In-memory / persistent queue of scanned healthcare documents
@@ -213,6 +218,13 @@ class MedicalDocumentStore:
             observaciones=observaciones
         )
         doc.historial_auditoria.append(audit_record)
+        return doc
+
+    def add_document(self, doc: MedicalDocumentItem) -> MedicalDocumentItem:
+        """Adds a document to the top of the queue."""
+        new_docs = {doc.id: doc}
+        new_docs.update(self._documents)
+        self._documents = new_docs
         return doc
 
 document_store = MedicalDocumentStore()
