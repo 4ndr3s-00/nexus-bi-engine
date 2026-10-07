@@ -100,3 +100,22 @@ def test_out_of_domain_queries_remain_blocked():
     
     assert res["is_out_of_domain"] is True
     assert res["sql"] == ""
+
+def test_clinica_metropolitana_sur_estancia_query():
+    """Verify exact user query: 'cual es la media de estancia de los pacientes en Clínica Metropolitana Sur'."""
+    q = "cual es la media de estancia de los pacientes en Clínica Metropolitana Sur"
+    res = text_to_sql.execute_analytical_query(q)
+    
+    assert res["is_out_of_domain"] is False
+    assert "WHERE i.nombre_ips = 'Clínica Metropolitana Sur'" in res["sql"]
+    assert res["row_count"] == 1
+    assert "estancia_promedio_horas" in res["sql"]
+    
+    report = insight_generator.generate_report(res)
+    assert report["direct_answer"] is not None
+    assert "horas" in report["direct_answer"]
+    assert "Clínica Metropolitana Sur" in report["headline"]
+    assert "Media de Estancia Hospitalaria" in report["headline"]
+    assert report["chart_type"] == "point_spotlight"
+    assert any("Media de Estancia" in c["label"] for c in report["kpi_cards"])
+

@@ -102,8 +102,13 @@ class QueryClassifier:
                 filters["i.es_24h"] = True
                 entities.append("filter:es_24h")
 
-            # Check IPS
-            for ips_name, ips_syns in ONTOLOGY["ips"].items():
+            # Check IPS (Sorted by longest synonym first to avoid partial matches)
+            sorted_ips = sorted(
+                ONTOLOGY["ips"].items(),
+                key=lambda item: max(len(s) for s in item[1]),
+                reverse=True
+            )
+            for ips_name, ips_syns in sorted_ips:
                 if any(syn in q for syn in ips_syns):
                     filters["i.nombre_ips"] = ips_name
                     entities.append(f"ips:{ips_name}")
@@ -156,10 +161,12 @@ class QueryClassifier:
                 subdomain = "CITAS"
                 target_metric = "oportunidad_citas_promedio"
 
-            # Check Subdomain: Urgencias / Triage
-            elif any(w in q for w in ["triage", "urgencias", "espera", "reingreso", "manchester"]):
+            # Check Subdomain: Urgencias / Triage / Estancia
+            elif any(w in q for w in ["triage", "urgencias", "espera", "reingreso", "manchester", "estancia"]):
                 subdomain = "URGENCIAS"
-                if any(w in q for w in ["reingreso", "reingresos"]):
+                if any(w in q for w in ["estancia", "media de estancia", "estancia media", "tiempo de estancia", "horas de estancia"]):
+                    target_metric = "estancia_promedio_horas"
+                elif any(w in q for w in ["reingreso", "reingresos"]):
                     target_metric = "tasa_reingreso_72h"
                 elif any(w in q for w in ["atenciones", "volumen", "pacientes"]):
                     target_metric = "total_atenciones_urgencias"
@@ -173,18 +180,22 @@ class QueryClassifier:
                 intent_type = QueryIntent.COMPARISON
             elif any(w in q for w in ["evolucion", "tendencia", "historico", "mes a mes"]):
                 intent_type = QueryIntent.TREND
+            elif ("i.nombre_ips" in filters or "e.nombre_eps" in filters) and not any(w in q for w in ["todas", "comparativa", "ranking"]):
+                intent_type = QueryIntent.POINT
             elif any(w in q for w in ["cuanto", "cuánto", "cual es", "cuál es", "promedio"]) and ("i.nombre_ips" in filters or "e.nombre_eps" in filters):
                 intent_type = QueryIntent.POINT
             else:
                 intent_type = QueryIntent.GENERAL
 
-            limit = 10
+            limit = 1 if intent_type == QueryIntent.POINT else 10
             if subdomain == "URGENCIAS":
                 if any(w in q for w in ["diagnostico", "diagnósticos", "cie10", "cie-10", "enfermedad", "patologia", "patología"]):
                     group_by = ["c.cie10_code", "c.descripcion"]
                     target_metric = "total_atenciones_urgencias"
                 elif "f.triage_level" in filters:
                     group_by = ["i.nombre_ips", "f.triage_level"]
+                elif "i.nombre_ips" in filters:
+                    group_by = ["i.nombre_ips"]
                 elif any(w in q for w in ["eps", "aseguradora"]):
                     group_by = ["e.nombre_eps"]
                 elif any(w in q for w in ["hora", "horario", "pico"]):

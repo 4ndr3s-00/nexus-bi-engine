@@ -5,16 +5,44 @@ Eliminates hallucinations by establishing strict schema boundaries and Habeas Da
 """
 
 ONTOLOGY = {
-    # 1. Healthcare Canonical Entities
+    # 1. Healthcare Canonical Entities (Exact match to dim_ips and dim_eps)
     "ips": {
-        "Hospital Universitario Central": ["hospital universitario", "huc", "universitario central", "bogota 24h", "hospital central"],
-        "Clínica Norte 24H": ["clinica norte", "clínica norte", "norte 24h", "medellin 24h"],
-        "Hospital San Vicente de Paul": ["san vicente", "san vicente de paul", "cali 24h"],
-        "Clínica Pediátrica Infantil 24H": ["clinica pediatrica", "clínica pediátrica", "infantil 24h", "barranquilla 24h", "pediatrica"],
-        "Centro Ambulatorio Especializado Sur": ["ambulatorio sur", "especializado sur", "bucaramanga"],
-        "Unidad Materno Infantil del Oriente": ["materno infantil", "unidad materno", "cucuta", "cúcuta"],
-        "Policlínica Cardiovascular Occidente": ["cardiovascular", "cardiovascular occidente", "policlinica", "pereira"],
-        "Centro de Diagnóstico y Cirugía Mayor": ["cirugia mayor", "diagnostico y cirugia", "cartagena"]
+        "Hospital Universitario Central": [
+            "hospital universitario central", "hospital universitario", "huc", 
+            "universitario central", "bogota 24h", "hospital central"
+        ],
+        "Clínica Pediátrica Santa María": [
+            "clinica pediatrica santa maria", "clínica pediátrica santa maría", 
+            "santa maria", "santa maría", "pediatrica santa maria", "pediatrica", "medellin 24h"
+        ],
+        "Hospital Traumatológico del Norte": [
+            "hospital traumatologico del norte", "hospital traumatológico del norte", 
+            "traumatologico del norte", "traumatológico del norte", "traumatologico", 
+            "traumatológico", "hospital traumatologico", "cali 24h"
+        ],
+        "Clínica Metropolitana Sur": [
+            "clinica metropolitana sur", "clínica metropolitana sur", "metropolitana sur", 
+            "clinica sur", "clínica sur", "metropolitana", "barranquilla 24h"
+        ],
+        "Centro Médico Ambulatorio Chapinero": [
+            "centro medico ambulatorio chapinero", "centro médico ambulatorio chapinero", 
+            "ambulatorio chapinero", "chapinero"
+        ],
+        "IPS Especializada Poblado": [
+            "ips especializada poblado", "especializada poblado", "poblado"
+        ],
+        "Unidad de Atención Básica Teusaquillo": [
+            "unidad de atencion basica teusaquillo", "unidad de atención básica teusaquillo", 
+            "atencion basica teusaquillo", "teusaquillo"
+        ],
+        "Policlínica Ambulatoria Occidente": [
+            "policlinica ambulatoria occidente", "policlínica ambulatoria occidente", 
+            "ambulatoria occidente", "occidente"
+        ],
+        # Aliases & common synonyms
+        "Clínica Norte 24H": ["clinica norte", "clínica norte", "norte 24h"],
+        "Hospital San Vicente de Paul": ["san vicente", "san vicente de paul"],
+        "Centro Ambulatorio Especializado Sur": ["ambulatorio sur", "especializado sur"]
     },
     "eps": {
         "Sura EPS": ["sura", "epssura", "seguros sura"],
@@ -56,12 +84,33 @@ ONTOLOGY = {
         "R104": ["dolor abdominal", "abdomen agudo", "r104"]
     },
     "healthcare_metrics": {
-        "tiempo_espera_minutos": ["tiempo de espera", "espera promedio", "minutos de espera", "triage tiempo", "espera en urgencias", "cuanto tardan", "cuánto tardan"],
-        "tasa_ocupacion_pct": ["ocupacion", "ocupación", "camas uci", "censo de camas", "camas ocupadas", "porcentaje de ocupacion", "saturacion de camas"],
-        "valor_glosado": ["glosas", "glosado", "valor glosado", "glosa rips", "cobros objetados", "glosas retenidas", "porcentaje de glosas"],
-        "dias_oportunidad": ["oportunidad de citas", "oportunidad", "dias de oportunidad", "días de oportunidad", "tiempo de espera cita", "asignacion de citas", "dias para cita"],
-        "reingreso_72h": ["reingreso", "reingresos a 72 horas", "tasa de reingreso", "reingresos 72h"],
-        "total_atenciones": ["atenciones", "volumen de atenciones", "pacientes atendidos", "urgencias atendidas", "total de urgencias", "admisiones"]
+        "estancia_promedio_horas": [
+            "estancia", "media de estancia", "estancia media", "tiempo de estancia", 
+            "horas de estancia", "duracion de estancia", "duración de estancia", "dias de estancia"
+        ],
+        "tiempo_espera_minutos": [
+            "tiempo de espera", "espera promedio", "minutos de espera", "triage tiempo", 
+            "espera en urgencias", "cuanto tardan", "cuánto tardan"
+        ],
+        "tasa_ocupacion_pct": [
+            "ocupacion", "ocupación", "camas uci", "censo de camas", "camas ocupadas", 
+            "porcentaje de ocupacion", "saturacion de camas"
+        ],
+        "valor_glosado": [
+            "glosas", "glosado", "valor glosado", "glosa rips", "cobros objetados", 
+            "glosas retenidas", "porcentaje de glosas"
+        ],
+        "dias_oportunidad": [
+            "oportunidad de citas", "oportunidad", "dias de oportunidad", "días de oportunidad", 
+            "tiempo de espera cita", "asignacion de citas", "dias para cita"
+        ],
+        "reingreso_72h": [
+            "reingreso", "reingresos a 72 horas", "tasa de reingreso", "reingresos 72h"
+        ],
+        "total_atenciones": [
+            "atenciones", "volumen de atenciones", "pacientes atendidos", "urgencias atendidas", 
+            "total de urgencias", "admisiones"
+        ]
     },
 
     # 2. Tech B2B Historical Entities (Preserved for backwards compatibility)
@@ -127,7 +176,6 @@ ONTOLOGY = {
     }
 }
 
-# Strictly Out-of-Domain Keywords (HR, Cryptos, Warehousing logistics, Social media)
 OUT_OF_DOMAIN_BLACKLIST = {
     "recursos humanos", "rrhh", "empleados", "salarios", "nomina", "nómina", "contrataciones",
     "despidos", "vacaciones", "bitcoin", "crypto", "criptomonedas", "ethereum", "token",
@@ -136,7 +184,6 @@ OUT_OF_DOMAIN_BLACKLIST = {
     "acciones en bolsa", "dividendos de wall street", "clima", "temperatura"
 }
 
-# PII Keywords forbidden under Ley 1581 (Habeas Data de Salud)
 PII_KEYWORDS = {
     "cedula", "cédula", "nombre del paciente", "quien es el paciente", "quién es el paciente",
     "identificacion del paciente", "identificación del paciente", "numero de documento",

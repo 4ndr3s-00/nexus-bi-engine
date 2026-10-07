@@ -48,6 +48,8 @@ class TextToSqlEngine:
                 order_col = "total_atenciones"
             elif intent.target_metric == "tasa_reingreso_72h":
                 order_col = "tasa_reingreso_pct"
+            elif intent.target_metric == "estancia_promedio_horas":
+                order_col = "estancia_promedio_horas"
 
             sql = f"""SELECT
     {dim_select},

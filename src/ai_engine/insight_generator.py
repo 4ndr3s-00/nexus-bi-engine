@@ -85,9 +85,10 @@ class ExecutiveInsightGenerator:
             "total_levantado", "tasa_glosa_pct", "total_citas_solicitadas",
             "oportunidad_promedio_dias", "cumplimiento_meta_pct"
         }
-        dim_keys = [k for k in first_row.keys() if k not in clinical_metric_keys]
+        dim_keys = [k for k in first_row.keys() if k not in clinical_metric_keys and k != "es_24h"]
         first_name = " - ".join(str(first_row[k]) for k in dim_keys) if dim_keys else "Red Asistencial"
         intent_type = intent_data.get("intent_type", "GENERAL")
+        target_metric = intent_data.get("target_metric", "")
 
         # Determine Chart Type
         if len(data) == 1 or intent_type == "POINT":
@@ -101,34 +102,60 @@ class ExecutiveInsightGenerator:
 
         direct_answer = None
 
-        # 1. URGENCIAS / TRIAGE
-        if "tiempo_espera_promedio_min" in first_row:
-            t_espera = first_row.get("tiempo_espera_promedio_min", 0.0)
-            atenciones = sum(r.get("total_atenciones", 0) for r in data)
-            tasa_reingreso = first_row.get("tasa_reingreso_pct", 0.0)
-            direct_answer = f"{t_espera} minutos"
+        # 1. URGENCIAS / TRIAGE / ESTANCIA
+        if "tiempo_espera_promedio_min" in first_row or "estancia_promedio_horas" in first_row:
+            if target_metric == "estancia_promedio_horas" or "estancia" in question.lower():
+                estancia = first_row.get("estancia_promedio_horas", 0.0)
+                atenciones = sum(r.get("total_atenciones", 0) for r in data)
+                direct_answer = f"{estancia} horas"
+                headline = f"Media de Estancia Hospitalaria: {estancia} horas ({first_name})"
+                summary = (
+                    f"Respuesta directa: En **{first_name}**, la **media de estancia de los pacientes es de {estancia} horas** "
+                    f"(con un tiempo promedio de espera en Triage de {first_row.get('tiempo_espera_promedio_min', 0.0)} minutos "
+                    f"y un volumen evaluado de {first_row.get('total_atenciones', 0):,} atenciones de urgencias)."
+                )
+                highlights = [
+                    f"⏱️ **Media de Estancia**: {estancia} horas por paciente ({first_name}).",
+                    f"🚨 **Espera en Triage**: {first_row.get('tiempo_espera_promedio_min', 0.0)} minutos promedio.",
+                    f"👥 **Atenciones Analizadas**: {atenciones:,} pacientes ingresados."
+                ]
+                recs = [
+                    "Optimizar procesos de interconsulta y apoyo diagnóstico para acortar la estancia en observación.",
+                    "Monitorear la rotación de camas para evitar congestión en el servicio de urgencias."
+                ]
+                kpi_cards = [
+                    {"label": "Media de Estancia", "value": f"{estancia} horas", "change": f"{first_name}", "trend": "up"},
+                    {"label": "Espera en Triage", "value": f"{first_row.get('tiempo_espera_promedio_min', 0.0)} min", "change": "Manchester", "trend": "up"},
+                    {"label": "Atenciones Urgencias", "value": f"{atenciones:,}", "change": "24/7", "trend": "up"},
+                    {"label": "Latencia OLAP", "value": f"{latency_ms} ms", "change": "DuckDB", "trend": "up"}
+                ]
+            else:
+                t_espera = first_row.get("tiempo_espera_promedio_min", 0.0)
+                atenciones = sum(r.get("total_atenciones", 0) for r in data)
+                tasa_reingreso = first_row.get("tasa_reingreso_pct", 0.0)
+                direct_answer = f"{t_espera} minutos"
 
-            headline = f"Informe Asistencial de Urgencias: {t_espera} min de Espera Promedio ({first_name})"
-            summary = (
-                f"En respuesta a '{question}', la atención en urgencias para **{first_name}** registra un "
-                f"**tiempo de espera promedio de {t_espera} minutos** con una estancia hospitalaria media de "
-                f"{first_row.get('estancia_promedio_horas', 0.0)} horas y {first_row.get('total_atenciones', 0):,} admisiones evaluadas."
-            )
-            highlights = [
-                f"⏱️ **Tiempo de Espera Triage**: Promedio de {t_espera} minutos ({first_name}).",
-                f"🏥 **Volumen de Pacientes**: {atenciones:,} ingresos en urgencias analizados.",
-                f"🔄 **Tasa de Reingreso a 72h**: {tasa_reingreso}% de pacientes con retorno temprano."
-            ]
-            recs = [
-                "Priorizar asignación de médicos en turnos pico nocturnos para reducir demoras en Triage II y III.",
-                "Realizar auditoría clínica de altas tempranas para contener la tasa de reingreso."
-            ]
-            kpi_cards = [
-                {"label": "Triage Promedio", "value": f"{t_espera} min", "change": "-4.2 min", "trend": "up"},
-                {"label": "Atenciones Urgencias", "value": f"{atenciones:,}", "change": "24/7", "trend": "up"},
-                {"label": "Reingreso 72h", "value": f"{tasa_reingreso}%", "change": "Normativo", "trend": "up"},
-                {"label": "Latencia OLAP", "value": f"{latency_ms} ms", "change": "DuckDB", "trend": "up"}
-            ]
+                headline = f"Informe Asistencial de Urgencias: {t_espera} min de Espera Promedio ({first_name})"
+                summary = (
+                    f"En respuesta a '{question}', la atención en urgencias para **{first_name}** registra un "
+                    f"**tiempo de espera promedio de {t_espera} minutos** con una estancia hospitalaria media de "
+                    f"{first_row.get('estancia_promedio_horas', 0.0)} horas y {first_row.get('total_atenciones', 0):,} admisiones evaluadas."
+                )
+                highlights = [
+                    f"⏱️ **Tiempo de Espera Triage**: Promedio de {t_espera} minutos ({first_name}).",
+                    f"🏥 **Volumen de Pacientes**: {atenciones:,} ingresos en urgencias analizados.",
+                    f"🔄 **Tasa de Reingreso a 72h**: {tasa_reingreso}% de pacientes con retorno temprano."
+                ]
+                recs = [
+                    "Priorizar asignación de médicos en turnos pico nocturnos para reducir demoras en Triage II y III.",
+                    "Realizar auditoría clínica de altas tempranas para contener la tasa de reingreso."
+                ]
+                kpi_cards = [
+                    {"label": "Triage Promedio", "value": f"{t_espera} min", "change": "-4.2 min", "trend": "up"},
+                    {"label": "Atenciones Urgencias", "value": f"{atenciones:,}", "change": "24/7", "trend": "up"},
+                    {"label": "Reingreso 72h", "value": f"{tasa_reingreso}%", "change": "Normativo", "trend": "up"},
+                    {"label": "Latencia OLAP", "value": f"{latency_ms} ms", "change": "DuckDB", "trend": "up"}
+                ]
 
         # 2. CAMAS / UCI
         elif "tasa_ocupacion_pct" in first_row:
